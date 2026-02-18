@@ -5,7 +5,7 @@ A web-based tool for designing Finite State Machines (FSM). Designed for use in 
 Developed by the **GIBIC Group at LEICI Research Institute (UNLP-CONICET)**.
 
 ## 🚀 Live Demo
-You can access the live tool here: `https://[your-username].github.io/GraficadorFSM/` 
+You can access the live tool here: `https://gibic-leici.github.io/GraficadorFSM/` 
 
 ## ✨ Key Features
 - **Modern Properties Panel**: Agile, real-time editing of state names, actions, and transition symbols.
