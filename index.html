@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSM Grapher & Simulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="toolbar">
+        <h1>FSM Grapher</h1>
+        <div class="controls">
+            <button id="addStateBtn">Add State</button>
+            <button id="deleteBtn">Delete Selected</button>
+            <button id="clearBtn">Clear Board</button>
+            <button id="themeToggleBtn">Switch to Light Theme</button>
+            <button id="exportBtn">Export JSON</button>
+            <button id="importBtn">Import JSON</button>
+            <button id="exportPngBtn">Export Image (PNG)</button>
+            <input type="file" id="fileInput" style="display:none" accept=".json">
+            <div class="separator"></div>
+            <!-- Simulation Controls (Hidden for now) -->
+            <div id="simulationControls" style="display:none;">
+                <button id="simulateBtn">Start Simulation</button>
+                <input type="text" id="inputString" placeholder="Input string (e.g. 101)" disabled>
+                <button id="stepBtn" disabled>Step</button>
+                <button id="resetSimBtn" disabled>Reset Sim</button>
+            </div>
+        </div>
+        <div class="instructions">
+            <p><strong>Click "Add State"</strong> to create a new state.</p>
+            <p><strong>Drag</strong> states to move them.</p>
+            <p><strong>Shift + Drag</strong> between states to add Transition.</p>
+            <p><strong>Delete Selected</strong> to remove selected items.</p>
+            <p><strong>Dbl Click</strong> on State/Transition to edit label.</p>
+            <p><strong>Alt + Click</strong> to set Start State.</p>
+        </div>
+    </div>
+    <div id="canvas-container">
+        <canvas id="fsmCanvas"></canvas>
+    </div>
+
+    <!-- Properties Panel -->
+    <div id="propertiesPanel" class="panel hidden">
+        <h3>Properties</h3>
+        <div id="stateProperties" class="prop-group hidden">
+            <label for="stateName">Name:</label>
+            <input type="text" id="stateName">
+            <label for="stateAction">Action(s):</label>
+            <textarea id="stateAction" rows="3" placeholder="One action per line"></textarea>
+            <label for="stateRadius">Radius:</label>
+            <input type="number" id="stateRadius" min="30" max="150" value="45">
+        </div>
+        <div id="transitionProperties" class="prop-group hidden">
+            <label for="transLabel">Input Symbol(s):</label>
+            <textarea id="transLabel" rows="3" placeholder="One symbol per line"></textarea>
+        </div>
+        <div id="noSelectionMsg">Select an item to edit properties</div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
