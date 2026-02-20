@@ -5,7 +5,7 @@ function getWorldPos(e) {
     };
 }
 
-function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null, highlight = false) {
+function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null, highlight = false, isFailing = false) {
     if (!text) return { width: 0, height: 0 };
     const lines = text.split('\n');
     const lineHeight = fontSize + 4;
@@ -30,14 +30,20 @@ function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null, hig
         while ((match = regex.exec(line)) !== null) {
             if (match.index > lastIndex) {
                 const part = line.substring(lastIndex, match.index);
-                tokens.push({ text: part, color: color });
+                tokens.push({ text: part, color: color, isCondition: false });
                 lineWidth += ctx.measureText(part).width;
             }
             const mText = match[0];
-            const mColor = match[1] ? theme.syntaxCondition : theme.syntaxFunction;
-            tokens.push({ text: mText, color: mColor });
+            const isCondToken = !!match[1];
+            const mColor = (isFailing && isCondToken) ? '#ff4d4d' : (match[1] ? theme.syntaxCondition : theme.syntaxFunction);
+
+            if (isFailing && isCondToken) ctx.font = `bold ${fontSize + 2}px Arial`;
+            else ctx.font = `${fontSize}px Arial`;
+
+            tokens.push({ text: mText, color: mColor, isCondition: isCondToken });
             lineWidth += ctx.measureText(mText).width;
             lastIndex = regex.lastIndex;
+            ctx.font = `${fontSize}px Arial`;
         }
         if (lastIndex < line.length) {
             const part = line.substring(lastIndex);
@@ -64,8 +70,20 @@ function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null, hig
 
         mLine.tokens.forEach(token => {
             ctx.fillStyle = token.color;
-            ctx.fillText(token.text, currentX, lineY);
+            let drawX = currentX;
+            let drawY = lineY;
+
+            if (isFailing && token.isCondition) {
+                ctx.font = `bold ${fontSize + 2}px Arial`;
+                drawX += (Math.random() - 0.5) * 6;
+                drawY += (Math.random() - 0.5) * 6;
+            } else {
+                ctx.font = `${fontSize}px Arial`;
+            }
+
+            ctx.fillText(token.text, drawX, drawY);
             currentX += ctx.measureText(token.text).width;
+            ctx.font = `${fontSize}px Arial`;
         });
     });
     ctx.textAlign = oldAlign;
@@ -104,17 +122,11 @@ class State {
 
         if (this.isPseudostate) {
             if (this.simWarning) {
-                const msg = this.simWarning === "deadlock"
-                    ? "Deadlock: No condition is met"
-                    : "Conflict: Multiple valid paths";
-
                 ctx.save();
                 ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
                 ctx.font = '20px Arial';
-                ctx.fillText('⚠️', this.x, this.y - 12);
-                ctx.font = 'bold 12px Arial';
-                ctx.fillStyle = isDarkTheme ? '#ff6b6b' : '#c92a2a';
-                ctx.fillText(msg, this.x, this.y - 32);
+                ctx.fillText('⚠️', this.x, this.y);
                 ctx.restore();
             }
             return;
@@ -211,6 +223,7 @@ class Transition {
         this.startAnchorAngle = null;
         this.endAnchorAngle = null;
         this.labelOffset = { x: 0, y: 0 };
+        this.failHighlightUntil = 0;
     }
 
     draw(ctx) {
@@ -330,8 +343,8 @@ class Transition {
             }
 
             if (fullText) {
-                ctx.font = '14px Arial';
-                const dims = drawMultilineText(ctx, fullText, labelX, labelY, 14, theme.labelColor, theme.labelBg, true);
+                const isFailing = Date.now() < this.failHighlightUntil;
+                const dims = drawMultilineText(ctx, fullText, labelX, labelY, 14, theme.labelColor, theme.labelBg, true, isFailing);
                 textWidth = dims.width;
                 textHeight = dims.height;
             }

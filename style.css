@@ -103,29 +103,41 @@ input[type="text"] {
     height: 100vh;
 }
 
-#sidebar-right {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    z-index: 10;
-    max-height: calc(100vh - 40px);
-    pointer-events: none;
-    /* Let clicks pass through gap */
-}
+/* Removed sidebar-right as panels are now absolute siblings of body */
 
 .panel {
     background-color: var(--toolbar-bg);
-    padding: 15px;
+    padding: 0;
+    /* Changed to use padding in contents */
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border-color);
     width: 220px;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition: opacity 0.3s ease;
     pointer-events: auto;
-    /* Re-enable for panel itself */
+    position: absolute;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 10px 15px;
+    margin: 0 !important;
+    cursor: move;
+    user-select: none;
+    font-size: 1rem;
+    color: var(--accent-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel>.prop-group,
+.panel>#alertsList,
+.panel>#noSelectionMsg,
+.panel>#consoleLog {
+    padding: 15px;
 }
 
 /* Properties Panel is positioned by its parent #sidebar-right */
@@ -230,4 +242,75 @@ canvas {
 
 .var-row input {
     width: 60px;
+}
+
+#alertPanel h3 {
+    font-size: 0.9rem;
+    margin: 0 0 8px 0;
+    border-bottom: 1px solid rgba(243, 156, 18, 0.3);
+    padding-bottom: 4px;
+}
+
+.alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+
+.alert-item.error {
+    background: rgba(231, 76, 60, 0.1);
+    border-left: 3px solid #e74c3c;
+}
+
+.alert-item.warning {
+    background: rgba(241, 196, 15, 0.1);
+    border-left: 3px solid #f1c40f;
+}
+
+.alert-icon {
+    font-size: 1rem;
+}
+
+.alert-text {
+    line-height: 1.2;
+}
+
+.alert-item.error strong {
+    color: #e74c3c;
+}
+
+.alert-item.warning strong {
+    color: #f1c40f;
+}
+
+/* Console Panel Override */
+#consolePanel {
+    max-height: 250px;
+}
+
+#consoleLog {
+    background: #000;
+    color: #0f0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.8rem;
+    padding: 8px;
+    border-radius: 4px;
+    overflow-y: auto;
+    flex-grow: 1;
+    min-height: 100px;
+    line-height: 1.4;
+}
+
+#consoleLog div {
+    border-bottom: 1px solid #222;
+    padding: 2px 0;
+}
+
+#consoleLog div::before {
+    content: "> ";
+    color: #fff;
+    opacity: 0.5;
 }

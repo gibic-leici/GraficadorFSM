@@ -37,46 +37,49 @@
         <canvas id="fsmCanvas"></canvas>
     </div>
 
-    <!-- Properties Panel -->
-    <!-- Sidebar Right -->
-    <div id="sidebar-right">
-        <div id="propertiesPanel" class="panel hidden">
-            <h3>Properties</h3>
-            <div id="stateProperties" class="prop-group hidden">
-                <label for="stateName">Name:</label>
-                <input type="text" id="stateName">
-                <label for="stateAction">Action(s):</label>
-                <textarea id="stateAction" rows="3" placeholder="One action per line"></textarea>
-                <label for="stateRadius">Radius:</label>
-                <input type="number" id="stateRadius" min="30" max="150" value="45">
-            </div>
-            <div id="transitionProperties" class="prop-group hidden">
-                <label for="transEvent">Event(s):</label>
-                <textarea id="transEvent" rows="3" placeholder="e.g. signal[x>5]"></textarea>
-                <label for="transAction">Action(s):</label>
-                <textarea id="transAction" rows="3" placeholder="e.g. doSomething()"></textarea>
-            </div>
-            <div id="noSelectionMsg">Select an item to edit properties</div>
-        </div>
+    <!-- Dynamic Panels (Positioned absolutely) -->
 
-        <!-- Simulation Panel -->
-        <div id="simPanel" class="panel hidden">
-            <h3>Simulation</h3>
-            <div class="prop-group">
-                <button id="startSimBtn">Start/Reset Simulation</button>
-                <div id="activeStateDisplay" style="font-weight: bold; margin: 5px 0;">Active: (None)</div>
-            </div>
-            <div class="separator"></div>
-            <div id="variablesContainer">
-                <label>Variables:</label>
-                <div id="varsList" class="prop-group"></div>
-            </div>
-            <div class="separator"></div>
-            <div id="eventsContainer">
-                <label>Fire Event:</label>
-                <div id="eventsList" class="sim-buttons-grid"></div>
-            </div>
+    <div id="propertiesPanel" class="panel hidden" style="top: 10px; right: 10px;">
+        <h3 class="panel-header">Properties</h3>
+        <div id="stateProperties" class="prop-group hidden">
+            <label for="stateName">Name:</label>
+            <input type="text" id="stateName">
+            <label for="stateAction">Action(s):</label>
+            <textarea id="stateAction" rows="3" placeholder="One action per line"></textarea>
+            <label for="stateRadius">Radius:</label>
+            <input type="number" id="stateRadius" min="30" max="150" value="45">
         </div>
+        <div id="transitionProperties" class="prop-group hidden">
+            <label for="transEvent">Event(s):</label>
+            <textarea id="transEvent" rows="3" placeholder="e.g. signal[x>5]"></textarea>
+            <label for="transAction">Action(s):</label>
+            <textarea id="transAction" rows="3" placeholder="e.g. doSomething()"></textarea>
+        </div>
+        <div id="noSelectionMsg">Select an item to edit properties</div>
+    </div>
+
+    <div id="simPanel" class="panel" style="top: 280px; right: 10px;">
+        <h3 class="panel-header">Simulation</h3>
+        <div class="prop-group">
+            <div id="activeStateDisplay" style="font-weight: bold; margin-bottom: 10px;">Active: (None)</div>
+            <button id="startSimBtn" style="width: 100%; margin-bottom: 10px;">Start Simulation</button>
+
+            <div style="font-size: 0.9rem; margin-bottom: 5px; color: #999;">Variables:</div>
+            <div id="varsList" style="margin-bottom: 15px;"></div>
+
+            <div style="font-size: 0.9rem; margin-bottom: 5px; color: #999;">Events:</div>
+            <div id="eventsList" class="sim-buttons-grid"></div>
+        </div>
+    </div>
+
+    <div id="alertPanel" class="panel hidden" style="top: 550px; right: 10px; border-color: #f39c12;">
+        <h3 class="panel-header" style="color: #f39c12; margin-bottom: 8px;">Warnings</h3>
+        <div id="alertsList" style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px;"></div>
+    </div>
+
+    <div id="consolePanel" class="panel hidden" style="top: 10px; right: 260px;">
+        <h3 class="panel-header">Action Log</h3>
+        <div id="consoleLog"></div>
     </div>
     <script src="js/models.js"></script>
     <script src="script.js"></script>

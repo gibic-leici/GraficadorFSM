@@ -171,6 +171,16 @@ function refreshSimVariables() {
 }
 
 function updateSimUI() {
+    const simPanel = document.getElementById('simPanel');
+    const consolePanel = document.getElementById('consolePanel');
+
+    if (isSimulating) {
+        consolePanel.classList.remove('hidden');
+    } else {
+        consolePanel.classList.add('hidden');
+    }
+
+    // Always show simPanel so Start button is accessible
     simPanel.classList.remove('hidden');
 
     startSimBtn.innerText = isSimulating ? "Reset/Stop Simulation" : "Start Simulation";
@@ -224,6 +234,51 @@ function updateSimUI() {
         // Let's allow it but check simulation state in fireEvent.
         eventsList.appendChild(btn);
     });
+}
+
+function makeDraggable(panel) {
+    const header = panel.querySelector('.panel-header');
+    if (!header) return;
+
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+
+    header.onmousedown = dragMouseDown;
+
+    function dragMouseDown(e) {
+        // Only trigger if clicking the header itself or its children
+        if (e.target !== header && !header.contains(e.target)) return;
+
+        e.preventDefault();
+        // get the mouse cursor position at startup:
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        // call a function whenever the cursor moves:
+        document.onmousemove = elementDrag;
+
+        // Bring to front
+        const panels = document.querySelectorAll('.panel');
+        panels.forEach(p => p.style.zIndex = "100");
+        panel.style.zIndex = "1000";
+    }
+
+    function elementDrag(e) {
+        e.preventDefault();
+        // calculate the new cursor position:
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        // set the element's new position:
+        panel.style.top = (panel.offsetTop - pos2) + "px";
+        panel.style.left = (panel.offsetLeft - pos1) + "px";
+    }
+
+    function closeDragElement() {
+        // stop moving when mouse button is released:
+        document.onmouseup = null;
+        document.onmousemove = null;
+    }
 }
 
 function toggleTheme() {
@@ -386,6 +441,10 @@ function startSimulation() {
     }
     isSimulating = true;
 
+    // Clear console log
+    const consoleLog = document.getElementById('consoleLog');
+    if (consoleLog) consoleLog.innerHTML = "";
+
     // Initial animation from start dot to start state
     const startDotX = startState.x - startState.radius - 35;
     const startDotY = startState.y;
@@ -422,18 +481,28 @@ function fireEvent(eventName) {
     // Check if we are currently animating to prevent overlapping events
     if (animations.some(a => !a.complete)) return;
 
-    const validTransitions = transitions.filter(t => {
+    logToConsole(`Event: ${eventName}`, "event");
+
+    const candidates = transitions.filter(t => {
         if (t.from !== activeState) return false;
+        const tEvent = t.label.split('[')[0].trim();
+        return eventName === tEvent;
+    });
+
+    const validTransitions = candidates.filter(t => {
         const parts = t.label.split('[');
-        const tEvent = parts[0].trim();
-        const tCond = parts[1] ? parts[1].replace(']', '').trim() : "";
-        if (eventName !== tEvent) return false;
-        if (tCond) return evaluateCondition(tCond);
-        return true;
+        if (parts.length < 2) return true; // No condition
+        const tCond = parts[1].split(']')[0].trim();
+        return evaluateCondition(tCond);
     });
 
     if (validTransitions.length > 0) {
         performTransition(validTransitions[0]);
+    } else {
+        // Highlight candidates that failed to advance
+        candidates.forEach(t => {
+            t.failHighlightUntil = Date.now() + 400;
+        });
     }
 }
 
@@ -470,37 +539,90 @@ function executeSimulationStep() {
     if (!isSimulating || !activeState) return;
 
     if (activeState.isPseudostate) {
-        if (activeState.simWarning) {
-            console.warn(`Pseudostate warning: ${activeState.simWarning.toUpperCase()}`);
-        }
-        const nextTrans = transitions.find(nt => {
-            if (nt.from !== activeState) return false;
-            let cond = nt.label.trim();
-            if (cond.startsWith('[')) cond = cond.substring(1, cond.length - 1);
+        const outgoing = transitions.filter(nt => nt.from === activeState);
+
+        // Priority 1: Conditional transitions that are met
+        const condTransitions = outgoing.filter(t => t.label.trim() !== "" && t.label.trim() !== "[]");
+        const metConds = condTransitions.filter(t => {
+            const parts = t.label.split('[');
+            const cond = parts.length >= 2 ? parts[1].split(']')[0].trim() : "";
             return evaluateCondition(cond);
         });
 
-        if (nextTrans) {
-            performTransition(nextTrans);
+        if (metConds.length > 0) {
+            // If multiple met, just pick first (validation should have warned)
+            performTransition(metConds[0]);
+        } else {
+            // Priority 2: Unconditional 'else' path
+            const elseTrans = outgoing.find(t => t.label.trim() === "" || t.label.trim() === "[]");
+            if (elseTrans) {
+                performTransition(elseTrans);
+            }
         }
     }
 }
 
 function validatePseudostates() {
-    if (!isSimulating) return;
+    const alertPanel = document.getElementById('alertPanel');
+    const alertsList = document.getElementById('alertsList');
+    alertsList.innerHTML = "";
+    let baseAlerts = [];
+
     states.forEach(s => {
         if (!s.isPseudostate) return;
         const outgoing = transitions.filter(t => t.from === s);
-        let validCount = 0;
-        outgoing.forEach(t => {
-            let cond = t.label.trim();
-            if (cond.startsWith('[')) cond = cond.substring(1, cond.length - 1);
-            if (evaluateCondition(cond)) validCount++;
+        if (outgoing.length === 0) {
+            s.simWarning = "deadlock";
+            baseAlerts.push({ id: s.id, type: "Error", css: "error", msg: "Deadlock: No outgoing paths." });
+            return;
+        }
+
+        const condTransitions = outgoing.filter(t => t.label.trim() !== "" && t.label.trim() !== "[]");
+        const elseTrans = outgoing.find(t => t.label.trim() === "" || t.label.trim() === "[]");
+
+        // 1. Structural Check
+        if (!elseTrans) {
+            baseAlerts.push({ id: s.id, type: "Warning", css: "warning", msg: "Potential Deadlock: No default ('else') path found." });
+        }
+
+        // 2. Active Check (Current Values)
+        let validCondCount = 0;
+        condTransitions.forEach(t => {
+            const parts = t.label.split('[');
+            const cond = parts.length >= 2 ? parts[1].split(']')[0].trim() : "";
+            if (evaluateCondition(cond)) validCondCount++;
         });
-        if (validCount === 0) s.simWarning = "deadlock";
-        else if (validCount > 1) s.simWarning = "conflict";
-        else s.simWarning = null;
+
+        if (validCondCount > 1) {
+            s.simWarning = "conflict";
+            baseAlerts.push({ id: s.id, type: "Error", css: "error", msg: "Conflict: Multiple conditions met simultaneously." });
+        } else if (validCondCount === 0 && !elseTrans) {
+            s.simWarning = "deadlock";
+            baseAlerts.push({ id: s.id, type: "Error", css: "error", msg: "Deadlock: No condition met and no 'else' path." });
+        } else {
+            // OK or just structural warning
+            s.simWarning = elseTrans ? null : "warning";
+        }
     });
+
+    if (baseAlerts.length > 0) {
+        alertPanel.classList.remove('hidden');
+        baseAlerts.forEach(alert => {
+            const row = document.createElement('div');
+            const icon = alert.type === "Error" ? "❌" : "⚠️";
+            row.className = `alert-item ${alert.css}`;
+            row.innerHTML = `
+                <span class="alert-icon">${icon}</span>
+                <div class="alert-text">
+                    <strong>P${alert.id}: ${alert.type}</strong><br>
+                    ${alert.msg}
+                </div>
+            `;
+            alertsList.appendChild(row);
+        });
+    } else {
+        alertPanel.classList.add('hidden');
+    }
 }
 
 function evaluateCondition(cond) {
@@ -516,12 +638,27 @@ function evaluateCondition(cond) {
     }
 }
 
+function logToConsole(msg, type = "info") {
+    const consoleLog = document.getElementById('consoleLog');
+    if (!consoleLog) return;
+    const row = document.createElement('div');
+    if (type === "event") row.style.color = "#aaa";
+    if (type === "error") row.style.color = "#ff4d4d";
+    row.textContent = msg;
+    consoleLog.appendChild(row);
+    // Limit log size to 50 entries
+    if (consoleLog.children.length > 50) consoleLog.removeChild(consoleLog.firstChild);
+    consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+
 function executeAction(action) {
     if (!action) return;
     const lines = action.split('\n');
     lines.forEach(line => {
         try {
-            const parts = line.split('=');
+            const trimmed = line.trim();
+            if (!trimmed) return;
+            const parts = trimmed.split('=');
             if (parts.length === 2) {
                 const varName = parts[0].trim();
                 const expression = parts[1].trim();
@@ -529,14 +666,14 @@ function executeAction(action) {
                 const vals = Object.values(simContext);
                 const func = new Function(...keys, `return ${expression};`);
                 simContext[varName] = func(...vals);
+                logToConsole(`${varName} = ${simContext[varName]}`);
             } else {
-                const keys = Object.keys(simContext);
-                const vals = Object.values(simContext);
-                const func = new Function(...keys, line);
-                func(...vals);
+                // Just log the message/function call as text
+                logToConsole(trimmed);
             }
         } catch (e) {
             console.error("Action exec error:", e);
+            logToConsole(`Error: ${e.message}`, "error");
         }
     });
     validatePseudostates();
@@ -700,6 +837,7 @@ canvas.addEventListener('mouseup', e => {
             select(newTrans);
             refreshSimVariables();
             updateSimUI();
+            validatePseudostates();
         }
         creatingTransition = null;
     }
@@ -743,11 +881,13 @@ window.addEventListener('keydown', e => {
                 if (activeState === selectedObject) resetSimulation();
                 refreshSimVariables();
                 updateSimUI();
+                validatePseudostates();
                 select(null);
             } else if (selectedObject instanceof Transition) {
                 transitions = transitions.filter(t => t !== selectedObject);
                 refreshSimVariables();
                 updateSimUI();
+                validatePseudostates();
                 select(null);
             }
         }
@@ -760,6 +900,7 @@ stateActionInput.addEventListener('input', () => {
         selectedObject.action = stateActionInput.value;
         refreshSimVariables();
         updateSimUI();
+        validatePseudostates();
     }
 });
 stateRadiusInput.addEventListener('input', () => {
@@ -773,6 +914,7 @@ transEventInput.addEventListener('input', () => {
         selectedObject.label = transEventInput.value;
         refreshSimVariables();
         updateSimUI();
+        validatePseudostates();
     }
 });
 transActionInput.addEventListener('input', () => {
@@ -780,6 +922,7 @@ transActionInput.addEventListener('input', () => {
         selectedObject.action = transActionInput.value;
         refreshSimVariables();
         updateSimUI();
+        validatePseudostates();
     }
 });
 
@@ -789,6 +932,7 @@ document.getElementById('addStateBtn').onclick = () => {
     select(s);
     refreshSimVariables();
     updateSimUI();
+    validatePseudostates();
 };
 document.getElementById('addPseudoStateBtn').onclick = () => {
     const s = new State(canvas.width / 2 - viewOffset.x, canvas.height / 2 - viewOffset.y, stateIdCounter++, true);
@@ -796,6 +940,7 @@ document.getElementById('addPseudoStateBtn').onclick = () => {
     select(s);
     refreshSimVariables();
     updateSimUI();
+    validatePseudostates();
 };
 document.getElementById('deleteBtn').onclick = () => {
     if (selectedObject) {
@@ -810,11 +955,13 @@ document.getElementById('deleteBtn').onclick = () => {
         select(null);
         refreshSimVariables();
         updateSimUI();
+        validatePseudostates();
     }
 };
 document.getElementById('clearBtn').onclick = () => {
     if (confirm("Clear all?")) {
         states = []; transitions = []; startState = null; activeState = null; isSimulating = false; stateIdCounter = 0; select(null); updateSimUI();
+        validatePseudostates();
     }
 };
 document.getElementById('themeToggleBtn').onclick = toggleTheme;
@@ -831,3 +978,6 @@ requestAnimationFrame(draw);
 updatePropertiesPanel();
 updateSimUI();
 if (isDarkTheme) document.body.classList.add('dark-theme');
+
+// Make panels draggable
+document.querySelectorAll('.panel').forEach(makeDraggable);
