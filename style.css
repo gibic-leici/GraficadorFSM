@@ -207,11 +207,18 @@ canvas {
 .sim-event-btn {
     font-size: 0.75rem;
     padding: 4px;
-    background-color: #444;
+    background-color: #666;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background-color 0.1s, transform 0.05s;
 }
 
 .sim-event-btn:hover {
     background-color: var(--accent-color);
+}
+
+.sim-event-btn:active {
+    background-color: #357abd;
+    transform: scale(0.95);
 }
 
 .var-row {

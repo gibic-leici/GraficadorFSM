@@ -290,8 +290,26 @@ class Transition {
             curveMidY = 0.25 * startY + 0.5 * cpY + 0.25 * endY;
         }
 
-        const labelX = curveMidX + this.labelOffset.x;
-        const labelY = curveMidY + this.labelOffset.y;
+        const labelDist = 20; // Default perpendicular distance
+        let labelX, labelY;
+
+        if (isLoop) {
+            // For loops, offset outwards from the state center
+            const angleMid = Math.atan2(curveMidY - this.from.y, curveMidX - this.from.x);
+            labelX = curveMidX + Math.cos(angleMid) * labelDist + this.labelOffset.x;
+            labelY = curveMidY + Math.sin(angleMid) * labelDist + this.labelOffset.y;
+        } else {
+            // For curves, calculate normal to the straight path
+            const dx = endX - startX;
+            const dy = endY - startY;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Normal vector (-dy, dx)
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            labelX = curveMidX + nx * labelDist + this.labelOffset.x;
+            labelY = curveMidY + ny * labelDist + this.labelOffset.y;
+        }
         let textWidth = 0;
         let textHeight = 0;
 

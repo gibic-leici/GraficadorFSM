@@ -216,6 +216,7 @@ function updateSimUI() {
 
     relevantEvents.forEach(evt => {
         const btn = document.createElement('button');
+        btn.className = 'sim-event-btn';
         btn.innerText = evt;
         btn.onclick = () => fireEvent(evt);
         // Only enable if simulating? No, user said "anyone and it will have effect or not"
@@ -253,7 +254,8 @@ function exportJSON() {
             labelOffset: t.labelOffset
         })),
         stateIdCounter,
-        isDarkTheme
+        isDarkTheme,
+        simContext
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -305,6 +307,9 @@ function importJSON(e) {
             if (data.isDarkTheme !== undefined) {
                 isDarkTheme = !data.isDarkTheme; // toggleTheme will flip it back
                 toggleTheme();
+            }
+            if (data.simContext) {
+                simContext = data.simContext;
             }
             refreshSimVariables();
             select(null);
