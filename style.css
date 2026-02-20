@@ -103,41 +103,42 @@ input[type="text"] {
     height: 100vh;
 }
 
-/* Removed sidebar-right as panels are now absolute siblings of body */
+#sidebar-right {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    pointer-events: none;
+    z-index: 100;
+    overflow-y: auto;
+    padding-right: 5px;
+    /* space for scrollbar */
+}
 
 .panel {
     background-color: var(--toolbar-bg);
-    padding: 0;
-    /* Changed to use padding in contents */
+    padding: 15px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border-color);
-    width: 220px;
+    width: 100%;
+    /* Take full sidebar width */
     transition: opacity 0.3s ease;
     pointer-events: auto;
-    position: absolute;
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    position: relative;
+    /* Default for sidebar */
 }
 
 .panel-header {
-    background: rgba(0, 0, 0, 0.1);
-    padding: 10px 15px;
-    margin: 0 !important;
-    cursor: move;
-    user-select: none;
     font-size: 1rem;
+    margin: 0 0 10px 0;
     color: var(--accent-color);
     border-bottom: 1px solid var(--border-color);
-}
-
-.panel>.prop-group,
-.panel>#alertsList,
-.panel>#noSelectionMsg,
-.panel>#consoleLog {
-    padding: 15px;
+    padding-bottom: 5px;
 }
 
 /* Properties Panel is positioned by its parent #sidebar-right */
@@ -202,11 +203,7 @@ canvas {
 
 /* Simulation Panel specific styles */
 #simPanel {
-    /* Positioned by sidebar flex */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    border: 1px solid var(--border-color);
     max-height: 400px;
-    overflow-y: auto;
 }
 
 .sim-buttons-grid {
@@ -286,9 +283,14 @@ canvas {
     color: #f1c40f;
 }
 
-/* Console Panel Override */
 #consolePanel {
-    max-height: 250px;
+    position: absolute;
+    top: 10px;
+    right: 260px;
+    /* Adjusted to be next to sidebar */
+    width: 240px;
+    max-height: 300px;
+    z-index: 101;
 }
 
 #consoleLog {
