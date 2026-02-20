@@ -1,62 +1,55 @@
+﻿// DOM Elements
 const canvas = document.getElementById('fsmCanvas');
 const ctx = canvas.getContext('2d');
 
+const propPanel = document.getElementById('propertiesPanel');
+const stateProps = document.getElementById('stateProperties');
+const transProps = document.getElementById('transitionProperties');
+const noSelectionMsg = document.getElementById('noSelectionMsg');
+
+const stateNameInput = document.getElementById('stateName');
+const stateActionInput = document.getElementById('stateAction');
+const stateRadiusInput = document.getElementById('stateRadius');
+const transEventInput = document.getElementById('transEvent');
+const transActionInput = document.getElementById('transAction');
+
+const simPanel = document.getElementById('simPanel');
+const varsList = document.getElementById('varsList');
+const eventsList = document.getElementById('eventsList');
+const startSimBtn = document.getElementById('startSimBtn');
+const activeStateDisplay = document.getElementById('activeStateDisplay');
+
+// Global Application State
 let states = [];
 let transitions = [];
 let draggingState = null;
-let draggingPoint = null; // For transition control points
-let creatingTransition = null; // { from: state, to: mouseX/Y }
+let draggingPoint = null;
+let creatingTransition = null;
 
-// Simulation
+// Simulation State
 let startState = null;
 let activeState = null;
+let simContext = {};
+let isSimulating = false;
+let animations = [];
 
-// UI State
+// UI & Interaction State
 let isDarkTheme = true;
 let lastMouseMoveTime = Date.now();
 let handleOpacity = 1;
-const HANDLE_FADE_DELAY = 1500; // ms before fade starts
-const HANDLE_FADE_SPEED = 0.03; // opacity change per frame
-const STATE_RADIUS = 45; // Increased from 30
-const SNAP_DIST = 15;
-
 let viewOffset = { x: 0, y: 0 };
 let isPanning = false;
 let lastPanPoint = { x: 0, y: 0 };
+let selectedObject = null;
+let stateIdCounter = 0;
 
-function getWorldPos(e) {
-    return {
-        x: e.clientX - viewOffset.x,
-        y: e.clientY - viewOffset.y
-    };
-}
+// Configuration Constants
+const HANDLE_FADE_DELAY = 1500;
+const HANDLE_FADE_SPEED = 0.03;
+const STATE_RADIUS = 45;
+const SNAP_DIST = 15;
 
-function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null) {
-    if (!text) return { width: 0, height: 0 };
-    const lines = text.split('\n');
-    const lineHeight = fontSize + 4;
-
-    let maxWidth = 0;
-    lines.forEach(l => {
-        const w = ctx.measureText(l).width;
-        if (w > maxWidth) maxWidth = w;
-    });
-
-    const totalHeight = lines.length * lineHeight;
-
-    if (bgColor) {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(x - maxWidth / 2 - 4, y - totalHeight / 2 - 2, maxWidth + 8, totalHeight + 4);
-    }
-
-    ctx.fillStyle = color;
-    lines.forEach((line, i) => {
-        ctx.fillText(line, x, y - totalHeight / 2 + i * lineHeight + fontSize / 2 + 2);
-    });
-
-    return { width: maxWidth, height: totalHeight };
-}
-
+// Theme Definitions
 const THEMES = {
     dark: {
         bg: '#1e1e1e',
@@ -68,9 +61,11 @@ const THEMES = {
         activeState: '#4a704a',
         startState: '#2d4d2d',
         labelBg: 'rgba(30, 30, 30, 0.8)',
-        labelColor: '#e0e0e0', // Matched to text
+        labelColor: '#e0e0e0',
         handle: '#666',
-        tempLine: '#666'
+        tempLine: '#666',
+        syntaxCondition: '#f1c40f',
+        syntaxFunction: '#5dade2'
     },
     light: {
         bg: '#ffffff',
@@ -82,9 +77,11 @@ const THEMES = {
         activeState: '#eeeeee',
         startState: '#dddddd',
         labelBg: 'rgba(255, 255, 255, 0.9)',
-        labelColor: '#000000', // Already black
+        labelColor: '#000000',
         handle: '#999',
-        tempLine: '#999'
+        tempLine: '#999',
+        syntaxCondition: '#c05621',
+        syntaxFunction: '#2b6cb0'
     }
 };
 
@@ -92,335 +89,7 @@ function getTheme() {
     return isDarkTheme ? THEMES.dark : THEMES.light;
 }
 
-let stateIdCounter = 0;
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    // Don't call draw() here to avoid multiple loops
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-// --- Classes ---
-
-class State {
-    constructor(x, y, id) {
-        this.x = x;
-        this.y = y;
-        this.id = id;
-        this.label = `q${id}`;
-        this.action = "";
-        this.radius = STATE_RADIUS; // Individual radius
-        this.isStart = false;
-    }
-
-    draw(ctx) {
-        const theme = getTheme();
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-
-        if (activeState === this) {
-            ctx.fillStyle = theme.activeState;
-        } else if (this.isStart) {
-            ctx.fillStyle = theme.startState;
-        } else {
-            ctx.fillStyle = theme.stateFill;
-        }
-
-        ctx.fill();
-        ctx.strokeStyle = theme.stateStroke;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Start state arrow
-        if (this.isStart) {
-            ctx.beginPath();
-            ctx.moveTo(this.x - this.radius - 20, this.y);
-            ctx.lineTo(this.x - this.radius, this.y);
-            // Arrowhead
-            ctx.lineTo(this.x - this.radius - 5, this.y - 5);
-            ctx.moveTo(this.x - this.radius, this.y);
-            ctx.lineTo(this.x - this.radius - 5, this.y + 5);
-            ctx.strokeStyle = theme.transition;
-            ctx.stroke();
-        }
-
-        if (selectedObject === this) {
-            ctx.save();
-            ctx.strokeStyle = theme.selected;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        ctx.fillStyle = theme.text;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Clip text inside the circle to prevent overflow
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius - 5, 0, Math.PI * 2);
-        ctx.clip();
-
-        if (this.action) {
-            // Split space for name and action
-            ctx.fillStyle = theme.text;
-            ctx.font = 'bold 18px Arial';
-            ctx.fillText(this.label, this.x, this.y - 15);
-
-            // Draw divider
-            ctx.beginPath();
-            ctx.moveTo(this.x - this.radius * 0.6, this.y - 2);
-            ctx.lineTo(this.x + this.radius * 0.6, this.y - 2);
-            ctx.strokeStyle = theme.stateStroke;
-            ctx.globalAlpha = 0.3;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.globalAlpha = 1.0;
-
-            // Multi-line action
-            ctx.font = '12px Arial';
-            drawMultilineText(ctx, this.action, this.x, this.y + 18, 12, theme.text);
-        } else {
-            // Standard centered label
-            ctx.fillStyle = theme.text;
-            ctx.font = '22px Arial';
-            ctx.fillText(this.label, this.x, this.y);
-        }
-        ctx.restore(); // End clipping
-    }
-
-    isHit(x, y) {
-        const dx = x - this.x;
-        const dy = y - this.y;
-        return dx * dx + dy * dy < this.radius * this.radius;
-    }
-}
-
-class Transition {
-    constructor(from, to) {
-        this.from = from;
-        this.to = to;
-        this.label = "";
-
-        // Control point offset for curvature default
-        this.controlOffset = { x: 0, y: 0 };
-
-        // Anchor points (angles on the state circle)
-        // null means "automatic" (center-to-center vector)
-        this.startAnchorAngle = null;
-        this.endAnchorAngle = null;
-
-        // Label offset relative to curve midpoint
-        this.labelOffset = { x: 0, y: 0 };
-    }
-
-    draw(ctx) {
-        const theme = getTheme();
-        // Highlight if selected
-        if (selectedObject === this) {
-            ctx.strokeStyle = theme.selected;
-            ctx.lineWidth = 4;
-        } else {
-            ctx.strokeStyle = theme.transition;
-            ctx.lineWidth = 2;
-        }
-        ctx.beginPath();
-
-        let startX, startY, endX, endY, cpX, cpY, cp2X, cp2Y;
-        let isLoop = (this.from === this.to);
-
-        // Calculate start/end points on circle
-        const angleFrom = this.startAnchorAngle !== null
-            ? this.startAnchorAngle
-            : Math.atan2(this.to.y - this.from.y, this.to.x - this.from.x);
-
-        const angleTo = this.endAnchorAngle !== null
-            ? this.endAnchorAngle
-            : Math.atan2(this.from.y - this.to.y, this.from.x - this.to.x);
-
-        if (isLoop) {
-            // Self loop - use CUBIC Bezier for better "bulbous" shape
-            const r = this.from.radius;
-            const startA = this.startAnchorAngle !== null ? this.startAnchorAngle : -Math.PI / 2 - 0.4;
-            const endA = this.endAnchorAngle !== null ? this.endAnchorAngle : -Math.PI / 2 + 0.4;
-
-            startX = this.from.x + Math.cos(startA) * r;
-            startY = this.from.y + Math.sin(startA) * r;
-            endX = this.from.x + Math.cos(endA) * r;
-            endY = this.from.y + Math.sin(endA) * r;
-
-            // Default push magnitude
-            let pushMag = r * 1.8;
-            if (this.controlOffset.x !== 0 || this.controlOffset.y !== 0) {
-                // Approximate push magnitude from drag offset
-                pushMag = Math.sqrt(this.controlOffset.x ** 2 + this.controlOffset.y ** 2) + r + 15;
-            }
-
-            // Control points extend radially from the circle for perpendicularity
-            cpX = startX + Math.cos(startA) * pushMag;
-            cpY = startY + Math.sin(startA) * pushMag;
-            cp2X = endX + Math.cos(endA) * pushMag;
-            cp2Y = endY + Math.sin(endA) * pushMag;
-
-            // Manual user offset applied to the whole loop position
-            cpX += this.controlOffset.x;
-            cpY += this.controlOffset.y;
-            cp2X += this.controlOffset.x;
-            cp2Y += this.controlOffset.y;
-
-        } else {
-            // Normal transition - keep QUADRATIC
-            startX = this.from.x + Math.cos(angleFrom) * this.from.radius;
-            startY = this.from.y + Math.sin(angleFrom) * this.from.radius;
-            endX = this.to.x + Math.cos(angleTo) * this.to.radius;
-            endY = this.to.y + Math.sin(angleTo) * this.to.radius;
-
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-
-            cpX = midX + this.controlOffset.x;
-            cpY = midY + this.controlOffset.y;
-        }
-
-        // Draw Curve
-        ctx.moveTo(startX, startY);
-        if (isLoop) {
-            ctx.bezierCurveTo(cpX, cpY, cp2X, cp2Y, endX, endY);
-        } else {
-            ctx.quadraticCurveTo(cpX, cpY, endX, endY);
-        }
-        ctx.stroke();
-
-        // Draw Arrowhead
-        // For Cubic, tangent at t=1 is (end - CP2). For Quad, it's (end - CP1).
-        const tipCPX = isLoop ? cp2X : cpX;
-        const tipCPY = isLoop ? cp2Y : cpY;
-        const angleToEnd = Math.atan2(endY - tipCPY, endX - tipCPX);
-        this.drawArrow(ctx, endX, endY, angleToEnd);
-
-        // Calculate Label Position (at t=0.5)
-        let curveMidX, curveMidY;
-        if (isLoop) {
-            // Cubic: B(0.5) = 0.125*P0 + 0.375*P1 + 0.375*P2 + 0.125*P3
-            curveMidX = 0.125 * startX + 0.375 * cpX + 0.375 * cp2X + 0.125 * endX;
-            curveMidY = 0.125 * startY + 0.375 * cpY + 0.375 * cp2Y + 0.125 * endY;
-        } else {
-            // Quad: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
-            curveMidX = 0.25 * startX + 0.5 * cpX + 0.25 * endX;
-            curveMidY = 0.25 * startY + 0.5 * cpY + 0.25 * endY;
-        }
-
-        const labelX = curveMidX + this.labelOffset.x;
-        const labelY = curveMidY + this.labelOffset.y;
-        let textWidth = 0;
-        let textHeight = 0;
-
-        // Draw Label (Multi-line)
-        if (this.label) {
-            ctx.font = '14px Arial';
-            const dims = drawMultilineText(ctx, this.label, labelX, labelY, 14, theme.labelColor, theme.labelBg);
-            textWidth = dims.width;
-            textHeight = dims.height;
-        }
-
-        // Draw Handles
-        const handleColor = theme.handle;
-        if (isLoop) {
-            // Draw a single handle for loop control at the "top" of the loop
-            this.drawHandle(ctx, (cpX + cp2X) / 2, (cpY + cp2Y) / 2, handleColor);
-        } else {
-            this.drawHandle(ctx, cpX, cpY, handleColor);
-        }
-        this.drawHandle(ctx, startX, startY, handleColor);
-        this.drawHandle(ctx, endX, endY, handleColor);
-
-        // Save computed coordinates for hit testing
-        // For loops, we use the average CP for the hit test handle
-        this.computed = {
-            startX, startY, endX, endY,
-            cpX: isLoop ? (cpX + cp2X) / 2 : cpX,
-            cpY: isLoop ? (cpY + cp2Y) / 2 : cpY,
-            labelX, labelY, textWidth, textHeight
-        };
-    }
-
-    drawArrow(ctx, x, y, angle) {
-        const size = 10;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-size, -size / 2);
-        ctx.lineTo(-size, size / 2);
-        ctx.closePath();
-        const theme = getTheme();
-        ctx.fillStyle = theme.transition;
-        if (selectedObject === this) ctx.fillStyle = theme.selected;
-        ctx.fill();
-        ctx.restore();
-    }
-
-    drawHandle(ctx, x, y, color) {
-        if (handleOpacity <= 0) return;
-        ctx.save();
-        ctx.globalAlpha = handleOpacity;
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2); // Increased to 6px
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // Hit test returns string 'control', 'start', 'end', 'label' or null
-    getHitPart(x, y) {
-        if (!this.computed) return null;
-
-        const dist = (x1, y1, x2, y2) => (x1 - x2) ** 2 + (y1 - y2) ** 2;
-        const R2 = 100; // Increased hit area (10px radius) for larger handles
-
-        if (dist(x, y, this.computed.cpX, this.computed.cpY) < R2) return 'control';
-        if (dist(x, y, this.computed.startX, this.computed.startY) < R2) return 'start';
-        if (dist(x, y, this.computed.endX, this.computed.endY) < R2) return 'end';
-
-        // Label hit - box-based for whole area dragging
-        if (this.label) {
-            const lx = this.computed.labelX;
-            const ly = this.computed.labelY;
-            const tw = this.computed.textWidth / 2 + 5;
-            const th = this.computed.textHeight / 2 + 5;
-            if (x > lx - tw && x < lx + tw && y > ly - th && y < ly + th) {
-                return 'label';
-            }
-        }
-
-        return null;
-    }
-
-    isHit(x, y) {
-        return this.getHitPart(x, y) !== null;
-    }
-}
-
-// --- Interaction ---
-
-let selectedObject = null;
-
-const propPanel = document.getElementById('propertiesPanel');
-const stateProps = document.getElementById('stateProperties');
-const transProps = document.getElementById('transitionProperties');
-const noSelectionMsg = document.getElementById('noSelectionMsg');
-
-const stateNameInput = document.getElementById('stateName');
-const stateActionInput = document.getElementById('stateAction');
-const stateRadiusInput = document.getElementById('stateRadius');
-const transLabelInput = document.getElementById('transLabel');
-
+// --- UI Functions ---
 function select(obj) {
     selectedObject = obj;
     updatePropertiesPanel();
@@ -439,40 +108,449 @@ function updatePropertiesPanel() {
         stateNameInput.value = selectedObject.label;
         stateActionInput.value = selectedObject.action || "";
         stateRadiusInput.value = selectedObject.radius;
+
+        const displayStyle = selectedObject.isPseudostate ? 'none' : '';
+        stateNameInput.previousElementSibling.style.display = displayStyle;
+        stateNameInput.style.display = displayStyle;
+        stateActionInput.previousElementSibling.style.display = displayStyle;
+        stateActionInput.style.display = displayStyle;
+
     } else if (selectedObject instanceof Transition) {
         transProps.classList.remove('hidden');
-        transLabelInput.value = selectedObject.label;
+        transEventInput.value = selectedObject.label || "";
+        transActionInput.value = selectedObject.action || "";
+
+        const labelNode = transEventInput.previousElementSibling;
+        if (selectedObject.from.isPseudostate) {
+            labelNode.innerText = "Condition(s):";
+            transEventInput.placeholder = "e.g. x > 5";
+        } else {
+            labelNode.innerText = "Event(s):";
+            transEventInput.placeholder = "e.g. signal[x>5]";
+        }
+        labelNode.style.display = '';
+        transEventInput.style.display = '';
     }
 }
 
-// Live editing
-stateNameInput.addEventListener('input', () => {
-    if (selectedObject instanceof State) selectedObject.label = stateNameInput.value;
-});
-stateActionInput.addEventListener('input', () => {
-    if (selectedObject instanceof State) selectedObject.action = stateActionInput.value;
-});
-stateRadiusInput.addEventListener('input', () => {
-    if (selectedObject instanceof State) {
-        const val = parseInt(stateRadiusInput.value);
-        if (!isNaN(val)) selectedObject.radius = Math.max(30, Math.min(150, val));
+function refreshSimVariables() {
+    const varRegex = /\b[a-zA-Z_]\w*\b/g;
+    const keywords = new Set(['true', 'false', 'null', 'Math', 'and', 'or', 'not']);
+
+    // Scan all transition labels for [variables]
+    transitions.forEach(t => {
+        const match = /\[(.*?)\]/.exec(t.label);
+        if (match) {
+            let m;
+            while ((m = varRegex.exec(match[1])) !== null) {
+                let v = m[0];
+                if (!keywords.has(v) && simContext[v] === undefined) {
+                    simContext[v] = 0;
+                }
+            }
+        }
+    });
+
+    // Also scan actions for assignments (e.g. x = y)
+    const scanActions = (actionText) => {
+        if (!actionText) return;
+        const lines = actionText.split('\n');
+        lines.forEach(line => {
+            const parts = line.split('=');
+            if (parts.length === 2) {
+                const varName = parts[0].trim();
+                if (varRegex.test(varName) && !keywords.has(varName) && simContext[varName] === undefined) {
+                    simContext[varName] = 0;
+                }
+            }
+        });
+    };
+
+    states.forEach(s => scanActions(s.action));
+    transitions.forEach(t => scanActions(t.action));
+}
+
+function updateSimUI() {
+    simPanel.classList.remove('hidden');
+
+    startSimBtn.innerText = isSimulating ? "Reset/Stop Simulation" : "Start Simulation";
+    activeStateDisplay.innerText = isSimulating && activeState ? `Active: ${activeState.isPseudostate ? "(Pseudostate)" : activeState.label}` : "Active: (None)";
+    activeStateDisplay.style.color = isSimulating ? '' : 'gray';
+
+    // Update variables
+    varsList.innerHTML = "";
+    Object.keys(simContext).sort().forEach(key => {
+        const row = document.createElement('div');
+        row.className = 'var-row';
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '10px';
+        row.style.marginBottom = '5px';
+
+        row.innerHTML = `<label style="min-width: 60px;">${key}:</label>`;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.style.width = '60px';
+        input.style.padding = '2px 5px';
+        input.value = simContext[key];
+        input.addEventListener('change', (e) => {
+            let val = parseFloat(e.target.value);
+            if (isNaN(val)) val = 0;
+            simContext[key] = val;
+            input.value = val;
+            validatePseudostates();
+        });
+
+        row.appendChild(input);
+        varsList.appendChild(row);
+    });
+
+    // Update events
+    eventsList.innerHTML = "";
+    const relevantEvents = new Set();
+    transitions.forEach(t => {
+        if (t.from.isPseudostate) return;
+        const evt = t.label.split('[')[0].trim();
+        if (evt) relevantEvents.add(evt);
+    });
+
+    relevantEvents.forEach(evt => {
+        const btn = document.createElement('button');
+        btn.innerText = evt;
+        btn.onclick = () => fireEvent(evt);
+        // Only enable if simulating? No, user said "anyone and it will have effect or not"
+        // But clicking an event button outside simulation might be confusing if it does nothing.
+        // Let's allow it but check simulation state in fireEvent.
+        eventsList.appendChild(btn);
+    });
+}
+
+function toggleTheme() {
+    isDarkTheme = !isDarkTheme;
+    const themeBtn = document.getElementById('themeToggleBtn');
+    if (isDarkTheme) {
+        document.body.classList.add('dark-theme');
+        themeBtn.innerText = "Switch to Light Theme";
+    } else {
+        document.body.classList.remove('dark-theme');
+        themeBtn.innerText = "Switch to Dark Theme";
     }
-});
-transLabelInput.addEventListener('input', () => {
-    if (selectedObject instanceof Transition) selectedObject.label = transLabelInput.value;
-});
+}
+
+// --- Storage Functions ---
+function exportJSON() {
+    const data = {
+        states: states.map(s => ({
+            id: s.id, x: s.x, y: s.y, label: s.label,
+            action: s.action, radius: s.radius, isStart: s.isStart,
+            isPseudostate: !!s.isPseudostate
+        })),
+        transitions: transitions.map(t => ({
+            from: t.from.id, to: t.to.id, label: t.label, action: t.action,
+            controlOffset: t.controlOffset,
+            startAnchorAngle: t.startAnchorAngle,
+            endAnchorAngle: t.endAnchorAngle,
+            labelOffset: t.labelOffset
+        })),
+        stateIdCounter,
+        isDarkTheme
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fsm_graph.json';
+    a.click();
+}
+
+function importJSON(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const data = JSON.parse(event.target.result);
+            states = [];
+            transitions = [];
+            startState = null;
+            activeState = null;
+            isSimulating = false;
+
+            data.states.forEach(sData => {
+                const s = new State(sData.x, sData.y, sData.id, sData.isPseudostate);
+                s.label = sData.label;
+                s.action = sData.action;
+                s.radius = sData.radius || (sData.isPseudostate ? 18 : STATE_RADIUS);
+                s.isStart = sData.isStart;
+                if (s.isStart) startState = s;
+                states.push(s);
+            });
+
+            data.transitions.forEach(tData => {
+                const from = states.find(s => s.id === tData.from);
+                const to = states.find(s => s.id === tData.to);
+                if (from && to) {
+                    const t = new Transition(from, to);
+                    t.label = tData.label;
+                    t.action = tData.action;
+                    t.controlOffset = tData.controlOffset || { x: 0, y: 0 };
+                    t.startAnchorAngle = tData.startAnchorAngle;
+                    t.endAnchorAngle = tData.endAnchorAngle;
+                    t.labelOffset = tData.labelOffset || { x: 0, y: 0 };
+                    transitions.push(t);
+                }
+            });
+
+            stateIdCounter = data.stateIdCounter || states.length;
+            if (data.isDarkTheme !== undefined) {
+                isDarkTheme = !data.isDarkTheme; // toggleTheme will flip it back
+                toggleTheme();
+            }
+            refreshSimVariables();
+            select(null);
+            updateSimUI();
+        } catch (err) {
+            alert("Error parsing JSON");
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function exportPNG() {
+    if (states.length === 0) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    states.forEach(s => {
+        minX = Math.min(minX, s.x - s.radius - 20);
+        minY = Math.min(minY, s.y - s.radius - 20);
+        maxX = Math.max(maxX, s.x + s.radius + 20);
+        maxY = Math.max(maxY, s.y + s.radius + 20);
+    });
+    transitions.forEach(t => {
+        if (t.computed) {
+            const lx = t.computed.labelX;
+            const ly = t.computed.labelY;
+            const tw = t.computed.textWidth / 2 + 10;
+            const th = t.computed.textHeight / 2 + 10;
+            minX = Math.min(minX, lx - tw, t.computed.cpX - 10);
+            minY = Math.min(minY, ly - th, t.computed.cpY - 10);
+            maxX = Math.max(maxX, lx + tw, t.computed.cpX + 10);
+            maxY = Math.max(maxY, ly + th, t.computed.cpY + 10);
+        }
+    });
+
+    const padding = 40;
+    const width = (maxX - minX) + padding * 2;
+    const height = (maxY - minY) + padding * 2;
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    const theme = getTheme();
+    tempCtx.fillStyle = theme.bg;
+    tempCtx.fillRect(0, 0, width, height);
+
+    tempCtx.save();
+    tempCtx.translate(-minX + padding, -minY + padding);
+
+    const oldOpacity = handleOpacity;
+    const oldSelection = selectedObject;
+    handleOpacity = 0;
+    selectedObject = null;
+
+    states.forEach(s => s.draw(tempCtx));
+    transitions.forEach(t => t.draw(tempCtx));
+
+    handleOpacity = oldOpacity;
+    selectedObject = oldSelection;
+    tempCtx.restore();
+
+    const link = document.createElement('a');
+    link.download = 'fsm_graph.png';
+    link.href = tempCanvas.toDataURL('image/png');
+    link.click();
+}
+
+// --- Simulation Functions ---
+function startSimulation() {
+    if (!startState) {
+        alert("Please set a Start State first (Alt + Click on a state)");
+        return;
+    }
+    isSimulating = true;
+
+    // Initial animation from start dot to start state
+    const startDotX = startState.x - startState.radius - 35;
+    const startDotY = startState.y;
+
+    const virtualStartTrans = {
+        isStartAnimation: true,
+        fromX: startDotX,
+        fromY: startDotY,
+        toX: startState.x - startState.radius,
+        toY: startState.y,
+        to: startState,
+        action: null
+    };
+
+    activeState = null; // Start state only becomes active after animation
+    performTransition(virtualStartTrans);
+
+    refreshSimVariables();
+    updateSimUI();
+    validatePseudostates();
+}
+
+function resetSimulation() {
+    isSimulating = false;
+    activeState = null;
+    // Don't clear simContext anymore so variables stay visible
+    updateSimUI();
+    states.forEach(s => s.simWarning = null);
+}
+
+function fireEvent(eventName) {
+    if (!isSimulating || !activeState) return;
+
+    // Check if we are currently animating to prevent overlapping events
+    if (animations.some(a => !a.complete)) return;
+
+    const validTransitions = transitions.filter(t => {
+        if (t.from !== activeState) return false;
+        const parts = t.label.split('[');
+        const tEvent = parts[0].trim();
+        const tCond = parts[1] ? parts[1].replace(']', '').trim() : "";
+        if (eventName !== tEvent) return false;
+        if (tCond) return evaluateCondition(tCond);
+        return true;
+    });
+
+    if (validTransitions.length > 0) {
+        performTransition(validTransitions[0]);
+    }
+}
+
+function performTransition(t) {
+    if (!isSimulating) return;
+
+    // Execute transition action immediately
+    if (t.action) executeAction(t.action);
+
+    // Create and queue animation
+    const anim = new TransitionAnimation(t);
+    animations.push(anim);
+
+    // Update UI (but activeState is still 't.from')
+    updateSimUI();
+
+    // Wait for animation to finish
+    setTimeout(() => {
+        if (!isSimulating) return;
+
+        // Arrival!
+        activeState = t.to;
+        if (activeState.action) executeAction(activeState.action);
+        updateSimUI();
+
+        // If it's a pseudostate, trigger next step automatically
+        if (activeState.isPseudostate) {
+            executeSimulationStep();
+        }
+    }, anim.duration);
+}
+
+function executeSimulationStep() {
+    if (!isSimulating || !activeState) return;
+
+    if (activeState.isPseudostate) {
+        if (activeState.simWarning) {
+            console.warn(`Pseudostate warning: ${activeState.simWarning.toUpperCase()}`);
+        }
+        const nextTrans = transitions.find(nt => {
+            if (nt.from !== activeState) return false;
+            let cond = nt.label.trim();
+            if (cond.startsWith('[')) cond = cond.substring(1, cond.length - 1);
+            return evaluateCondition(cond);
+        });
+
+        if (nextTrans) {
+            performTransition(nextTrans);
+        }
+    }
+}
+
+function validatePseudostates() {
+    if (!isSimulating) return;
+    states.forEach(s => {
+        if (!s.isPseudostate) return;
+        const outgoing = transitions.filter(t => t.from === s);
+        let validCount = 0;
+        outgoing.forEach(t => {
+            let cond = t.label.trim();
+            if (cond.startsWith('[')) cond = cond.substring(1, cond.length - 1);
+            if (evaluateCondition(cond)) validCount++;
+        });
+        if (validCount === 0) s.simWarning = "deadlock";
+        else if (validCount > 1) s.simWarning = "conflict";
+        else s.simWarning = null;
+    });
+}
+
+function evaluateCondition(cond) {
+    if (!cond || cond.trim() === "") return true;
+    try {
+        const keys = Object.keys(simContext);
+        const vals = Object.values(simContext);
+        const func = new Function(...keys, `return ${cond};`);
+        return !!func(...vals);
+    } catch (e) {
+        console.error("Condition eval error:", e);
+        return false;
+    }
+}
+
+function executeAction(action) {
+    if (!action) return;
+    const lines = action.split('\n');
+    lines.forEach(line => {
+        try {
+            const parts = line.split('=');
+            if (parts.length === 2) {
+                const varName = parts[0].trim();
+                const expression = parts[1].trim();
+                const keys = Object.keys(simContext);
+                const vals = Object.values(simContext);
+                const func = new Function(...keys, `return ${expression};`);
+                simContext[varName] = func(...vals);
+            } else {
+                const keys = Object.keys(simContext);
+                const vals = Object.values(simContext);
+                const func = new Function(...keys, line);
+                func(...vals);
+            }
+        } catch (e) {
+            console.error("Action exec error:", e);
+        }
+    });
+    validatePseudostates();
+}
+
+// --- Draw Loop ---
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
 
 function draw() {
     const theme = getTheme();
-    // Clear the whole screen first (untranslated)
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Apply view offset
     ctx.translate(viewOffset.x, viewOffset.y);
 
-    // Update handles opacity
     const timeSinceMove = Date.now() - lastMouseMoveTime;
     if (draggingPoint || creatingTransition || isPanning || timeSinceMove < HANDLE_FADE_DELAY) {
         handleOpacity = Math.min(1, handleOpacity + HANDLE_FADE_SPEED * 2);
@@ -480,15 +558,10 @@ function draw() {
         handleOpacity = Math.max(0, handleOpacity - HANDLE_FADE_SPEED);
     }
 
-    // Draw States FIRST (so transitions are on top)
     states.forEach(s => s.draw(ctx));
-
-    // Draw Transitions ON TOP
     transitions.forEach(t => t.draw(ctx));
 
-    // Draw temporary transition creation line
     if (creatingTransition) {
-        const theme = getTheme();
         ctx.beginPath();
         ctx.moveTo(creatingTransition.from.x, creatingTransition.from.y);
         ctx.lineTo(creatingTransition.to.x, creatingTransition.to.y);
@@ -498,44 +571,29 @@ function draw() {
         ctx.setLineDash([]);
     }
 
-    // Highlight is handled inside object draw methods now
+    animations = animations.filter(a => !a.complete);
+    animations.forEach(a => {
+        a.update();
+        a.draw(ctx);
+    });
 
     requestAnimationFrame(draw);
 }
 
-// Mouse Handlers
-canvas.addEventListener('contextmenu', e => e.preventDefault()); // Prevent right-click menu
+// --- Event Listeners ---
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('mousedown', e => {
     const worldPos = getWorldPos(e);
     const mx = worldPos.x;
     const my = worldPos.y;
 
-    // Right-click to Pan
     if (e.button === 2) {
         isPanning = true;
         lastPanPoint = { x: e.clientX, y: e.clientY };
         return;
     }
 
-    // Check hit on States (topmost first usually, but checks array order)
-    const hitState = states.slice().reverse().find(s => s.isHit(mx, my));
-
-    if (e.shiftKey && hitState) {
-        // Start creating transition
-        creatingTransition = { from: hitState, to: { x: mx, y: my } };
-        return;
-    }
-
-    if (e.altKey && hitState) {
-        // Set Start State
-        states.forEach(s => s.isStart = false);
-        hitState.isStart = true;
-        startState = hitState;
-        return;
-    }
-
-    // NEW Selection Logic: Check Handles FIRST (they are "on top")
     let hitTrans = null;
     let hitPart = null;
     for (let i = transitions.length - 1; i >= 0; i--) {
@@ -548,7 +606,6 @@ canvas.addEventListener('mousedown', e => {
     }
 
     if (hitTrans) {
-        // We hit a handle or label of a transition
         if (hitPart !== 'label') {
             draggingPoint = {
                 t: hitTrans,
@@ -568,17 +625,26 @@ canvas.addEventListener('mousedown', e => {
             };
         }
         select(hitTrans);
-        return; // Prioritize handle over state
+        return;
     }
 
-    // If no handle hit, check for state drag
+    const hitState = states.slice().reverse().find(s => s.isHit(mx, my));
+    if (e.shiftKey && hitState) {
+        creatingTransition = { from: hitState, to: { x: mx, y: my } };
+        return;
+    }
+    if (e.altKey && hitState) {
+        states.forEach(s => s.isStart = false);
+        hitState.isStart = true;
+        startState = hitState;
+        return;
+    }
     if (hitState) {
         draggingState = hitState;
         select(hitState);
-    } else {
-        // Clicked empty space
-        select(null);
+        return;
     }
+    select(null);
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -602,10 +668,10 @@ canvas.addEventListener('mousemove', e => {
     } else if (draggingPoint) {
         const dx = mx - draggingPoint.startX;
         const dy = my - draggingPoint.startY;
-
         if (draggingPoint.type === 'control') {
-            draggingPoint.t.controlOffset.x = draggingPoint.initialControl.x + dx;
-            draggingPoint.t.controlOffset.y = draggingPoint.initialControl.y + dy;
+            const mult = draggingPoint.t.from === draggingPoint.t.to ? 1.5 : 2.0;
+            draggingPoint.t.controlOffset.x = draggingPoint.initialControl.x + dx * mult;
+            draggingPoint.t.controlOffset.y = draggingPoint.initialControl.y + dy * mult;
         } else if (draggingPoint.type === 'label') {
             draggingPoint.t.labelOffset.x = draggingPoint.initialLabel.x + dx;
             draggingPoint.t.labelOffset.y = draggingPoint.initialLabel.y + dy;
@@ -618,256 +684,145 @@ canvas.addEventListener('mousemove', e => {
 });
 
 canvas.addEventListener('mouseup', e => {
-    if (e.button === 2) {
-        isPanning = false;
-        return;
+    if (isPanning) isPanning = false;
+    if (creatingTransition) {
+        const mx = e.clientX - viewOffset.x;
+        const my = e.clientY - viewOffset.y;
+        const hitState = states.slice().reverse().find(s => s.isHit(mx, my));
+        if (hitState) {
+            const newTrans = new Transition(creatingTransition.from, hitState);
+            transitions.push(newTrans);
+            select(newTrans);
+            refreshSimVariables();
+            updateSimUI();
+        }
+        creatingTransition = null;
     }
+    draggingState = null;
+    draggingPoint = null;
+});
 
+canvas.addEventListener('dblclick', e => {
     const worldPos = getWorldPos(e);
     const mx = worldPos.x;
     const my = worldPos.y;
 
-    if (creatingTransition) {
-        const hitState = states.find(s => s.isHit(mx, my));
-        if (hitState) {
-            // Create transition
-            transitions.push(new Transition(creatingTransition.from, hitState));
+    const hitState = states.slice().reverse().find(s => s.isHit(mx, my));
+    if (hitState && !hitState.isPseudostate) {
+        const newLabel = prompt("Enter state name:", hitState.label);
+        if (newLabel !== null) {
+            hitState.label = newLabel;
+            updatePropertiesPanel();
         }
-        creatingTransition = null;
-    } else if (draggingState) {
-        draggingState = null;
-    } else if (draggingPoint) {
-        draggingPoint = null;
-    }
-});
-
-canvas.addEventListener('dblclick', e => {
-    // prompts removed in favor of properties panel
-});
-
-// UI Actions
-
-document.getElementById('addStateBtn').addEventListener('click', () => {
-    const id = stateIdCounter++;
-    // Place in the visible center of the screen
-    const x = (canvas.width / 2 - viewOffset.x) + (Math.random() - 0.5) * 100;
-    const y = (canvas.height / 2 - viewOffset.y) + (Math.random() - 0.5) * 100;
-
-    const newState = new State(x, y, id);
-    states.push(newState);
-    select(newState);
-});
-
-document.getElementById('deleteBtn').addEventListener('click', () => {
-    if (!selectedObject) return;
-
-    if (selectedObject instanceof State) {
-        // Remove state
-        states = states.filter(s => s !== selectedObject);
-        // Remove associated transitions
-        transitions = transitions.filter(t => t.from !== selectedObject && t.to !== selectedObject);
-        select(null);
-    } else if (selectedObject instanceof Transition) {
-        transitions = transitions.filter(t => t !== selectedObject);
-        select(null);
-    }
-});
-
-document.getElementById('themeToggleBtn').addEventListener('click', () => {
-    isDarkTheme = !isDarkTheme;
-    document.body.classList.toggle('light-theme', !isDarkTheme);
-    document.getElementById('themeToggleBtn').innerText = isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme";
-});
-
-// Persistence: Export
-document.getElementById('exportBtn').addEventListener('click', () => {
-    const data = {
-        states: states.map(s => ({
-            id: s.id, x: s.x, y: s.y, label: s.label, action: s.action, radius: s.radius, isStart: s.isStart
-        })),
-        transitions: transitions.map(t => ({
-            fromId: t.from.id,
-            toId: t.to.id,
-            label: t.label,
-            controlOffset: t.controlOffset,
-            startAnchorAngle: t.startAnchorAngle,
-            endAnchorAngle: t.endAnchorAngle,
-            labelOffset: t.labelOffset
-        })),
-        isDarkTheme: isDarkTheme,
-        stateIdCounter: stateIdCounter
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fsm_graph_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-});
-
-// Persistence: Import
-document.getElementById('importBtn').addEventListener('click', () => {
-    document.getElementById('fileInput').click();
-});
-
-document.getElementById('fileInput').addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (event) {
-        try {
-            const data = JSON.parse(event.target.result);
-
-            // Clear current
-            states = [];
-            transitions = [];
-
-            // Re-create states
-            data.states.forEach(sData => {
-                const s = new State(sData.x, sData.y, sData.id);
-                s.label = sData.label;
-                s.action = sData.action;
-                s.radius = sData.radius || STATE_RADIUS;
-                s.isStart = sData.isStart;
-                if (s.isStart) startState = s;
-                states.push(s);
-            });
-
-            // Re-create transitions
-            data.transitions.forEach(tData => {
-                const from = states.find(s => s.id === tData.fromId);
-                const to = states.find(s => s.id === tData.toId);
-                if (from && to) {
-                    const t = new Transition(from, to);
-                    t.label = tData.label;
-                    t.controlOffset = tData.controlOffset;
-                    t.startAnchorAngle = tData.startAnchorAngle;
-                    t.endAnchorAngle = tData.endAnchorAngle;
-                    t.labelOffset = tData.labelOffset;
-                    transitions.push(t);
-                }
-            });
-
-            stateIdCounter = data.stateIdCounter || states.length;
-            isDarkTheme = data.isDarkTheme !== undefined ? data.isDarkTheme : true;
-            document.body.classList.toggle('light-theme', !isDarkTheme);
-            document.getElementById('themeToggleBtn').innerText = isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme";
-
-            select(null);
-            activeState = null;
-
-        } catch (err) {
-            alert("Error parsing JSON file.");
-            console.error(err);
-        }
-        e.target.value = ''; // Reset input
-    };
-    reader.readAsText(file);
-});
-
-// Image Export (PNG)
-document.getElementById('exportPngBtn').addEventListener('click', () => {
-    if (states.length === 0) {
-        alert("Board is empty.");
         return;
     }
 
-    // 1. Calculate Bounds
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    states.forEach(s => {
-        minX = Math.min(minX, s.x - s.radius);
-        maxX = Math.max(maxX, s.x + s.radius);
-        minY = Math.min(minY, s.y - s.radius);
-        maxY = Math.max(maxY, s.y + s.radius);
-    });
-
-    transitions.forEach(t => {
-        if (t.computed) {
-            // Use the control points and endpoints for bounding box
-            const { startX, startY, endX, endY, cpX, cpY, labelX, labelY } = t.computed;
-            // For labels, we add a bit of buffer
-            minX = Math.min(minX, startX, endX, cpX, labelX - 20);
-            maxX = Math.max(maxX, startX, endX, cpX, labelX + 20);
-            minY = Math.min(minY, startY, endY, cpY, labelY - 20);
-            maxY = Math.max(maxY, startY, endY, cpY, labelY + 20);
+    const hitTrans = transitions.slice().reverse().find(t => t.isHit(mx, my));
+    if (hitTrans) {
+        const promptMsg = hitTrans.from.isPseudostate ? "Enter condition:" : "Enter event name:";
+        const newLabel = prompt(promptMsg, hitTrans.label);
+        if (newLabel !== null) {
+            hitTrans.label = newLabel;
+            updatePropertiesPanel();
         }
-    });
-
-    const margin = 50;
-    minX -= margin; minY -= margin; maxX += margin; maxY += margin;
-
-    const width = maxX - minX;
-    const height = maxY - minY;
-
-    // 2. Create Off-screen canvas
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    const tCtx = tempCanvas.getContext('2d');
-
-    // 3. Prepare "Clean" Render
-    const oldOpacity = handleOpacity;
-    const oldSelected = selectedObject;
-    handleOpacity = 0;
-    selectedObject = null;
-
-    // 4. Draw onto off-screen canvas
-    tCtx.save();
-    tCtx.translate(-minX, -minY);
-
-    const theme = getTheme();
-    tCtx.fillStyle = theme.bg;
-    tCtx.fillRect(minX, minY, width, height);
-
-    states.forEach(s => s.draw(tCtx));
-    transitions.forEach(t => t.draw(tCtx));
-
-    tCtx.restore();
-
-    // 5. Trigger download
-    const link = document.createElement('a');
-    link.download = `fsm_graph_${Date.now()}.png`;
-    link.href = tempCanvas.toDataURL("image/png");
-    link.click();
-
-    // 6. Restore UI state
-    handleOpacity = oldOpacity;
-    select(oldSelected);
-});
-
-document.getElementById('clearBtn').addEventListener('click', () => {
-    if (confirm("Clear all states and transitions?")) {
-        states = [];
-        transitions = [];
-        startState = null;
-        activeState = null;
-        viewOffset = { x: 0, y: 0 };
-        select(null);
     }
 });
 
-// Keyboard Delete
 window.addEventListener('keydown', e => {
-    // Only delete if the user is NOT typing in an input/textarea
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-    if (e.key === 'Delete') {
-        document.getElementById('deleteBtn').click();
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObject) {
+        if (!(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+            if (selectedObject instanceof State) {
+                states = states.filter(s => s !== selectedObject);
+                transitions = transitions.filter(t => t.from !== selectedObject && t.to !== selectedObject);
+                if (startState === selectedObject) startState = null;
+                if (activeState === selectedObject) resetSimulation();
+                refreshSimVariables();
+                updateSimUI();
+                select(null);
+            } else if (selectedObject instanceof Transition) {
+                transitions = transitions.filter(t => t !== selectedObject);
+                refreshSimVariables();
+                updateSimUI();
+                select(null);
+            }
+        }
     }
 });
 
+stateNameInput.addEventListener('input', () => { if (selectedObject instanceof State) selectedObject.label = stateNameInput.value; });
+stateActionInput.addEventListener('input', () => {
+    if (selectedObject instanceof State) {
+        selectedObject.action = stateActionInput.value;
+        refreshSimVariables();
+        updateSimUI();
+    }
+});
+stateRadiusInput.addEventListener('input', () => {
+    if (selectedObject instanceof State) {
+        const val = parseInt(stateRadiusInput.value);
+        if (!isNaN(val)) selectedObject.radius = Math.max(30, Math.min(150, val));
+    }
+});
+transEventInput.addEventListener('input', () => {
+    if (selectedObject instanceof Transition) {
+        selectedObject.label = transEventInput.value;
+        refreshSimVariables();
+        updateSimUI();
+    }
+});
+transActionInput.addEventListener('input', () => {
+    if (selectedObject instanceof Transition) {
+        selectedObject.action = transActionInput.value;
+        refreshSimVariables();
+        updateSimUI();
+    }
+});
 
-// Intentionally disabling simulation listeners for now or keeping them but UI is hidden
-// --- Simulator --- (Hidden)
+document.getElementById('addStateBtn').onclick = () => {
+    const s = new State(canvas.width / 2 - viewOffset.x, canvas.height / 2 - viewOffset.y, stateIdCounter++);
+    states.push(s);
+    select(s);
+    refreshSimVariables();
+    updateSimUI();
+};
+document.getElementById('addPseudoStateBtn').onclick = () => {
+    const s = new State(canvas.width / 2 - viewOffset.x, canvas.height / 2 - viewOffset.y, stateIdCounter++, true);
+    states.push(s);
+    select(s);
+    refreshSimVariables();
+    updateSimUI();
+};
+document.getElementById('deleteBtn').onclick = () => {
+    if (selectedObject) {
+        if (selectedObject instanceof State) {
+            states = states.filter(s => s !== selectedObject);
+            transitions = transitions.filter(t => t.from !== selectedObject && t.to !== selectedObject);
+            if (startState === selectedObject) startState = null;
+            if (activeState === selectedObject) resetSimulation();
+        } else {
+            transitions = transitions.filter(t => t !== selectedObject);
+        }
+        select(null);
+        refreshSimVariables();
+        updateSimUI();
+    }
+};
+document.getElementById('clearBtn').onclick = () => {
+    if (confirm("Clear all?")) {
+        states = []; transitions = []; startState = null; activeState = null; isSimulating = false; stateIdCounter = 0; select(null); updateSimUI();
+    }
+};
+document.getElementById('themeToggleBtn').onclick = toggleTheme;
+document.getElementById('exportBtn').onclick = exportJSON;
+document.getElementById('importBtn').onclick = () => document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange = importJSON;
+document.getElementById('exportPngBtn').onclick = exportPNG;
+startSimBtn.onclick = () => { if (isSimulating) resetSimulation(); else startSimulation(); };
 
-/*
-const simulateBtn = document.getElementById('simulateBtn');
-// ... other sim code ...
-*/
-
-// Initial draw start
-draw();
+// --- Init ---
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+requestAnimationFrame(draw);
+updatePropertiesPanel();
+updateSimUI();
+if (isDarkTheme) document.body.classList.add('dark-theme');

@@ -1,3 +1,78 @@
+function getWorldPos(e) {
+    return {
+        x: e.clientX - viewOffset.x,
+        y: e.clientY - viewOffset.y
+    };
+}
+
+function drawMultilineText(ctx, text, x, y, fontSize, color, bgColor = null, highlight = false) {
+    if (!text) return { width: 0, height: 0 };
+    const lines = text.split('\n');
+    const lineHeight = fontSize + 4;
+    const theme = getTheme();
+
+    // First pass: measure text
+    let maxWidth = 0;
+    const measuredLines = lines.map(line => {
+        if (!highlight) {
+            const w = ctx.measureText(line).width;
+            if (w > maxWidth) maxWidth = w;
+            return { tokens: [{ text: line, color: color }], width: w };
+        }
+
+        // Tokenize for syntax highlighting
+        const regex = /(\[.*?\])|(\b\w+\s*\([^)]*\))/g;
+        let tokens = [];
+        let lastIndex = 0;
+        let match;
+        let lineWidth = 0;
+
+        while ((match = regex.exec(line)) !== null) {
+            if (match.index > lastIndex) {
+                const part = line.substring(lastIndex, match.index);
+                tokens.push({ text: part, color: color });
+                lineWidth += ctx.measureText(part).width;
+            }
+            const mText = match[0];
+            const mColor = match[1] ? theme.syntaxCondition : theme.syntaxFunction;
+            tokens.push({ text: mText, color: mColor });
+            lineWidth += ctx.measureText(mText).width;
+            lastIndex = regex.lastIndex;
+        }
+        if (lastIndex < line.length) {
+            const part = line.substring(lastIndex);
+            tokens.push({ text: part, color: color });
+            lineWidth += ctx.measureText(part).width;
+        }
+        if (lineWidth > maxWidth) maxWidth = lineWidth;
+        return { tokens, width: lineWidth };
+    });
+
+    const totalHeight = lines.length * lineHeight;
+
+    if (bgColor) {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(x - maxWidth / 2 - 4, y - totalHeight / 2 - 2, maxWidth + 8, totalHeight + 4);
+    }
+
+    // Second pass: draw
+    const oldAlign = ctx.textAlign;
+    ctx.textAlign = 'left';
+    measuredLines.forEach((mLine, i) => {
+        const lineY = y - totalHeight / 2 + i * lineHeight + fontSize / 2 + 2;
+        let currentX = x - mLine.width / 2;
+
+        mLine.tokens.forEach(token => {
+            ctx.fillStyle = token.color;
+            ctx.fillText(token.text, currentX, lineY);
+            currentX += ctx.measureText(token.text).width;
+        });
+    });
+    ctx.textAlign = oldAlign;
+
+    return { width: maxWidth, height: totalHeight };
+}
+
 class State {
     constructor(x, y, id, isPseudo = false) {
         this.x = x;
@@ -5,10 +80,10 @@ class State {
         this.id = id;
         this.label = isPseudo ? "" : `q${id}`;
         this.action = "";
-        this.radius = isPseudo ? 18 : STATE_RADIUS; // Larger dots for easier grabbing
+        this.radius = isPseudo ? 18 : STATE_RADIUS;
         this.isStart = false;
         this.isPseudostate = isPseudo;
-        this.simWarning = null; // "deadlock" or "conflict" or null
+        this.simWarning = null;
     }
 
     draw(ctx) {
@@ -18,8 +93,6 @@ class State {
 
         if (activeState === this) {
             ctx.fillStyle = theme.activeState;
-        } else if (this.isStart) {
-            ctx.fillStyle = theme.startState;
         } else {
             ctx.fillStyle = this.isPseudostate ? theme.stateStroke : theme.stateFill;
         }
@@ -32,15 +105,15 @@ class State {
         if (this.isPseudostate) {
             if (this.simWarning) {
                 const msg = this.simWarning === "deadlock"
-                    ? "Bloqueo: Ninguna condición se cumple"
-                    : "Conflicto: Múltiples salidas válidas";
+                    ? "Deadlock: No condition is met"
+                    : "Conflict: Multiple valid paths";
 
                 ctx.save();
                 ctx.textAlign = 'center';
                 ctx.font = '20px Arial';
                 ctx.fillText('⚠️', this.x, this.y - 12);
                 ctx.font = 'bold 12px Arial';
-                ctx.fillStyle = theme.name === 'dark' ? '#ff6b6b' : '#c92a2a';
+                ctx.fillStyle = isDarkTheme ? '#ff6b6b' : '#c92a2a';
                 ctx.fillText(msg, this.x, this.y - 32);
                 ctx.restore();
             }
@@ -48,14 +121,32 @@ class State {
         }
 
         if (this.isStart) {
+            const dotX = this.x - this.radius - 35;
+            const dotY = this.y;
+            const arrowEndX = this.x - this.radius;
+
+            // Draw start dot
             ctx.beginPath();
-            ctx.moveTo(this.x - this.radius - 20, this.y);
-            ctx.lineTo(this.x - this.radius, this.y);
-            ctx.lineTo(this.x - this.radius - 5, this.y - 5);
-            ctx.moveTo(this.x - this.radius, this.y);
-            ctx.lineTo(this.x - this.radius - 5, this.y + 5);
+            ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+            ctx.fillStyle = theme.transition;
+            ctx.fill();
+
+            // Draw line to state
+            ctx.beginPath();
+            ctx.moveTo(dotX, dotY);
+            ctx.lineTo(arrowEndX, dotY);
             ctx.strokeStyle = theme.transition;
+            ctx.lineWidth = 2;
             ctx.stroke();
+
+            // Draw arrowhead correctly at the edge
+            ctx.beginPath();
+            ctx.moveTo(arrowEndX, dotY);
+            ctx.lineTo(arrowEndX - 8, dotY - 5);
+            ctx.lineTo(arrowEndX - 8, dotY + 5);
+            ctx.closePath();
+            ctx.fillStyle = theme.transition;
+            ctx.fill();
         }
 
         if (selectedObject === this) {
@@ -294,5 +385,104 @@ class Transition {
 
     isHit(x, y) {
         return this.getHitPart(x, y) !== null;
+    }
+}
+
+class TransitionAnimation {
+    constructor(transition) {
+        this.transition = transition;
+        this.startTime = Date.now();
+        this.complete = false;
+        const dist = (x1, y1, x2, y2) => Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+        const SPEED = 2.5;
+        let pathLength = 0;
+
+        if (transition.isStartAnimation) {
+            this.isStartAnimation = true;
+            this.startX = transition.fromX;
+            this.startY = transition.fromY;
+            this.endX = transition.toX;
+            this.endY = transition.toY;
+            pathLength = dist(this.startX, this.startY, this.endX, this.endY);
+            this.duration = Math.max(100, pathLength / SPEED);
+            return;
+        }
+
+        this.path = { ...transition.computed };
+        this.isLoop = (transition.from === transition.to);
+
+        if (this.isLoop) {
+            const r = transition.from.radius;
+            const startA = transition.startAnchorAngle !== null ? transition.startAnchorAngle : -Math.PI / 2 - 0.4;
+            const endA = transition.endAnchorAngle !== null ? transition.endAnchorAngle : -Math.PI / 2 + 0.4;
+            let pushMag = r * 1.8;
+            if (transition.controlOffset.x !== 0 || transition.controlOffset.y !== 0) {
+                pushMag = Math.sqrt(transition.controlOffset.x ** 2 + transition.controlOffset.y ** 2) + r + 15;
+            }
+            this.cp1X = this.path.startX + Math.cos(startA) * pushMag + transition.controlOffset.x;
+            this.cp1Y = this.path.startY + Math.sin(startA) * pushMag + transition.controlOffset.y;
+            this.cp2X = this.path.endX + Math.cos(endA) * pushMag + transition.controlOffset.x;
+            this.cp2Y = this.path.endY + Math.sin(endA) * pushMag + transition.controlOffset.y;
+
+            pathLength = dist(this.path.startX, this.path.startY, this.cp1X, this.cp1Y) +
+                dist(this.cp1X, this.cp1Y, this.cp2X, this.cp2Y) +
+                dist(this.cp2X, this.cp2Y, this.path.endX, this.path.endY);
+        } else {
+            pathLength = dist(this.path.startX, this.path.startY, this.path.cpX, this.path.cpY) +
+                dist(this.path.cpX, this.path.cpY, this.path.endX, this.path.endY);
+        }
+
+        this.duration = Math.max(100, pathLength / SPEED);
+    }
+
+    update() {
+        const elapsed = Date.now() - this.startTime;
+        this.t = Math.min(1, elapsed / this.duration);
+        if (this.t >= 1) this.complete = true;
+    }
+
+    getPos(t) {
+        if (this.isStartAnimation) {
+            return {
+                x: this.startX + (this.endX - this.startX) * t,
+                y: this.startY + (this.endY - this.startY) * t
+            };
+        }
+        let x, y;
+        const invT = (1 - t);
+        if (this.isLoop) {
+            x = invT ** 3 * this.path.startX + 3 * invT ** 2 * t * this.cp1X + 3 * invT * t ** 2 * this.cp2X + t ** 3 * this.path.endX;
+            y = invT ** 3 * this.path.startY + 3 * invT ** 2 * t * this.cp1Y + 3 * invT * t ** 2 * this.cp2Y + t ** 3 * this.path.endY;
+        } else {
+            x = invT ** 2 * this.path.startX + 2 * invT * t * this.path.rawCpX + t ** 2 * this.path.endX;
+            y = invT ** 2 * this.path.startY + 2 * invT * t * this.path.rawCpY + t ** 2 * this.path.endY;
+        }
+        return { x, y };
+    }
+
+    draw(ctx) {
+        const theme = getTheme();
+        for (let i = 4; i >= 0; i--) {
+            const trailT = this.t - (i * 0.04);
+            if (trailT < 0 || trailT > 1) continue;
+            const pos = this.getPos(trailT);
+            const size = (i === 0) ? 12 : 10 - i * 1.5;
+            const alpha = 1 - (i * 0.2);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (i === 0) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = theme.transition;
+            }
+            const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.4, theme.transition);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
     }
 }
