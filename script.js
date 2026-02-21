@@ -247,11 +247,11 @@ function toggleTheme() {
     isDarkTheme = !isDarkTheme;
     const themeBtn = document.getElementById('themeToggleBtn');
     if (isDarkTheme) {
-        document.body.classList.add('dark-theme');
-        themeBtn.innerText = "Switch to Light Theme";
+        document.body.classList.remove('light-theme');
+        themeBtn.innerText = "☀ Theme";
     } else {
-        document.body.classList.remove('dark-theme');
-        themeBtn.innerText = "Switch to Dark Theme";
+        document.body.classList.add('light-theme');
+        themeBtn.innerText = "🌙 Theme";
     }
 }
 
@@ -1124,5 +1124,5 @@ resizeCanvas();
 requestAnimationFrame(draw);
 updatePropertiesPanel();
 updateSimUI();
-if (isDarkTheme) document.body.classList.add('dark-theme');
+if (!isDarkTheme) document.body.classList.add('light-theme');
 

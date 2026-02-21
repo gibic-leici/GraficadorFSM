@@ -11,19 +11,39 @@
 <body>
     <div id="toolbar">
         <h1>FSM Grapher</h1>
-        <div class="controls">
-            <button id="addStateBtn">Add State</button>
-            <button id="addPseudoStateBtn">Add Pseudostate</button>
-            <button id="deleteBtn">Delete Selected</button>
-            <button id="clearBtn">Clear Board</button>
-            <button id="themeToggleBtn">Switch to Light Theme</button>
-            <button id="exportBtn">Export as File</button>
-            <button id="importBtn">Import from File</button>
-            <button id="exportPngBtn">Export Image (PNG)</button>
-            <input type="file" id="fileInput" class="u-hidden" accept=".json">
-            <div class="separator"></div>
-            <button id="genCCodeBtn">Generate C Code</button>
+
+        <!-- Graph section -->
+        <div class="btn-section">
+            <div class="btn-section-label">Graph</div>
+            <div class="btn-group">
+                <button id="addStateBtn">Add State</button>
+                <button id="addPseudoStateBtn">Add Pseudostate</button>
+                <button id="deleteBtn">Delete Selected</button>
+                <button id="clearBtn">Clear Board</button>
+            </div>
         </div>
+
+        <!-- File section -->
+        <div class="btn-section">
+            <div class="btn-section-label">File</div>
+            <div class="btn-group">
+                <button id="exportBtn">Save</button>
+                <button id="importBtn">Load</button>
+                <button id="exportPngBtn" class="btn-full">Export Image (PNG)</button>
+            </div>
+        </div>
+
+        <!-- Tools section -->
+        <div class="btn-section">
+            <div class="btn-section-label">Tools</div>
+            <div class="btn-group">
+                <button id="genCCodeBtn">&lt;/&gt; C Code</button>
+                <button id="themeToggleBtn">☀ Theme</button>
+            </div>
+        </div>
+
+        <input type="file" id="fileInput" class="u-hidden" accept=".json">
+
         <div class="instructions">
             <p><strong>Click "Add State"</strong> to create a new state.</p>
             <p><strong>Drag</strong> states to move them.</p>
