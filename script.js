@@ -49,39 +49,46 @@ const HANDLE_FADE_SPEED = 0.03;
 const STATE_RADIUS = 45;
 const SNAP_DIST = 15;
 
+// Theme Helper
+const getCSSVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
+
 // Theme Definitions
 const THEMES = {
-    dark: {
-        bg: '#1e1e1e',
-        stateFill: '#1e1e1e',
-        stateStroke: '#e0e0e0',
-        text: '#e0e0e0',
-        transition: '#e0e0e0',
-        selected: '#4a90e2',
-        activeState: '#4a704a',
-        startState: '#2d4d2d',
-        labelBg: 'rgba(30, 30, 30, 0.8)',
-        labelColor: '#e0e0e0',
-        handle: '#666',
-        tempLine: '#666',
-        syntaxCondition: '#f1c40f',
-        syntaxFunction: '#5dade2'
+    get dark() {
+        return {
+            bg: getCSSVar('--bg-color'),
+            stateFill: getCSSVar('--canvas-state-fill'),
+            stateStroke: getCSSVar('--canvas-state-stroke'),
+            text: getCSSVar('--text-color'),
+            transition: getCSSVar('--canvas-state-stroke'),
+            selected: getCSSVar('--canvas-selected'),
+            activeState: getCSSVar('--canvas-active'),
+            startState: getCSSVar('--canvas-start'),
+            labelBg: 'rgba(30, 30, 30, 0.8)',
+            labelColor: getCSSVar('--text-color'),
+            handle: getCSSVar('--canvas-handle'),
+            tempLine: getCSSVar('--canvas-handle'),
+            syntaxCondition: getCSSVar('--syntax-cond'),
+            syntaxFunction: getCSSVar('--syntax-func')
+        };
     },
-    light: {
-        bg: '#ffffff',
-        stateFill: '#ffffff',
-        stateStroke: '#000000',
-        text: '#000000',
-        transition: '#000000',
-        selected: '#4a90e2',
-        activeState: '#eeeeee',
-        startState: '#dddddd',
-        labelBg: 'rgba(255, 255, 255, 0.9)',
-        labelColor: '#000000',
-        handle: '#999',
-        tempLine: '#999',
-        syntaxCondition: '#c05621',
-        syntaxFunction: '#2b6cb0'
+    get light() {
+        return {
+            bg: getCSSVar('--bg-color'),
+            stateFill: getCSSVar('--canvas-state-fill'),
+            stateStroke: getCSSVar('--canvas-state-stroke'),
+            text: getCSSVar('--text-color'),
+            transition: getCSSVar('--canvas-state-stroke'),
+            selected: getCSSVar('--canvas-selected'),
+            activeState: getCSSVar('--canvas-active'),
+            startState: getCSSVar('--canvas-start'),
+            labelBg: 'rgba(255, 255, 255, 0.9)',
+            labelColor: getCSSVar('--text-color'),
+            handle: getCSSVar('--canvas-handle'),
+            tempLine: getCSSVar('--canvas-handle'),
+            syntaxCondition: getCSSVar('--syntax-cond'),
+            syntaxFunction: getCSSVar('--syntax-func')
+        };
     }
 };
 
@@ -109,11 +116,11 @@ function updatePropertiesPanel() {
         stateActionInput.value = selectedObject.action || "";
         stateRadiusInput.value = selectedObject.radius;
 
-        const displayStyle = selectedObject.isPseudostate ? 'none' : '';
-        stateNameInput.previousElementSibling.style.display = displayStyle;
-        stateNameInput.style.display = displayStyle;
-        stateActionInput.previousElementSibling.style.display = displayStyle;
-        stateActionInput.style.display = displayStyle;
+        const isPseudo = selectedObject.isPseudostate;
+        stateNameInput.previousElementSibling.classList.toggle('u-hidden', isPseudo);
+        stateNameInput.classList.toggle('u-hidden', isPseudo);
+        stateActionInput.previousElementSibling.classList.toggle('u-hidden', isPseudo);
+        stateActionInput.classList.toggle('u-hidden', isPseudo);
 
     } else if (selectedObject instanceof Transition) {
         transProps.classList.remove('hidden');
@@ -128,8 +135,8 @@ function updatePropertiesPanel() {
             labelNode.innerText = "Event(s):";
             transEventInput.placeholder = "e.g. signal[x>5]";
         }
-        labelNode.style.display = '';
-        transEventInput.style.display = '';
+        labelNode.classList.remove('u-hidden');
+        transEventInput.classList.remove('u-hidden');
     }
 }
 
@@ -185,23 +192,22 @@ function updateSimUI() {
 
     startSimBtn.innerText = isSimulating ? "Reset/Stop Simulation" : "Start Simulation";
     activeStateDisplay.innerText = isSimulating && activeState ? `Active: ${activeState.isPseudostate ? "(Pseudostate)" : activeState.label}` : "Active: (None)";
-    activeStateDisplay.style.color = isSimulating ? '' : 'gray';
+    activeStateDisplay.classList.toggle('is-simulating', isSimulating);
 
     // Update variables
     varsList.innerHTML = "";
     Object.keys(simContext).sort().forEach(key => {
         const row = document.createElement('div');
         row.className = 'var-row';
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '10px';
-        row.style.marginBottom = '5px';
 
-        row.innerHTML = `<label style="min-width: 60px;">${key}:</label>`;
+        const label = document.createElement('label');
+        label.className = 'var-label';
+        label.innerText = `${key}:`;
+        row.appendChild(label);
+
         const input = document.createElement('input');
         input.type = 'number';
-        input.style.width = '60px';
-        input.style.padding = '2px 5px';
+        input.className = 'var-input';
         input.value = simContext[key];
         input.addEventListener('change', (e) => {
             let val = parseFloat(e.target.value);
@@ -528,8 +534,7 @@ function validatePseudostates() {
         if (!s.isPseudostate) return;
         const outgoing = transitions.filter(t => t.from === s);
         if (outgoing.length === 0) {
-            s.simWarning = "deadlock";
-            baseAlerts.push({ id: s.id, type: "Error", css: "error", msg: "Deadlock: No outgoing paths." });
+            s.simWarning = null; // Clear warning if no outgoing transitions
             return;
         }
 
@@ -598,8 +603,8 @@ function logToConsole(msg, type = "info") {
     const consoleLog = document.getElementById('consoleLog');
     if (!consoleLog) return;
     const row = document.createElement('div');
-    if (type === "event") row.style.color = "#aaa";
-    if (type === "error") row.style.color = "#ff4d4d";
+    if (type === "event") row.className = "console-line-event";
+    if (type === "error") row.className = "console-line-error";
     row.textContent = msg;
     consoleLog.appendChild(row);
     // Limit log size to 50 entries
@@ -926,6 +931,192 @@ document.getElementById('importBtn').onclick = () => document.getElementById('fi
 document.getElementById('fileInput').onchange = importJSON;
 document.getElementById('exportPngBtn').onclick = exportPNG;
 startSimBtn.onclick = () => { if (isSimulating) resetSimulation(); else startSimulation(); };
+
+// --- C Code Generation ---
+function toEnumName(label) {
+    return label
+        .replace(/[^a-zA-Z0-9_]/g, '_')
+        .replace(/^(\d)/, '_$1')
+        .toUpperCase();
+}
+
+function parseEventName(transitionLabel) {
+    return transitionLabel.split('[')[0].trim();
+}
+
+function resolvePseudoChain(pseudo) {
+    const outgoing = transitions.filter(t => t.from === pseudo);
+    const branches = [];
+    outgoing.forEach(t => {
+        const condRaw = t.label.trim();
+        const cond = condRaw && !condRaw.startsWith('[') ? `[${condRaw}]` : condRaw;
+        if (t.to.isPseudostate) {
+            const sub = resolvePseudoChain(t.to);
+            sub.forEach(b => branches.push({
+                cond: cond ? `${cond} && ${b.cond}` : b.cond,
+                target: b.target, action: t.action || b.action
+            }));
+        } else {
+            branches.push({ cond, target: t.to, action: t.action });
+        }
+    });
+    return branches;
+}
+
+function generateCCode() {
+    const codePanel = document.getElementById('codePanel');
+    const codeOutput = document.getElementById('codeOutput');
+    const toolbar = document.getElementById('toolbar');
+
+    if (!codePanel.classList.contains('hidden')) {
+        codePanel.classList.add('hidden');
+        return;
+    }
+
+    const tbRect = toolbar.getBoundingClientRect();
+    codePanel.style.top = (tbRect.bottom + 10) + 'px';
+
+    const realStates = states.filter(s => !s.isPseudostate);
+
+    if (realStates.length === 0) {
+        codeOutput.textContent = '/* No states defined yet. */';
+        codePanel.classList.remove('hidden');
+        return;
+    }
+
+    // Collect unique events
+    const eventSet = new Set();
+    transitions.forEach(t => {
+        if (!t.from.isPseudostate) {
+            t.label.split('\n').forEach(lbl => {
+                const evtName = parseEventName(lbl.trim());
+                if (evtName) eventSet.add(evtName);
+            });
+        }
+    });
+    const events = [...eventSet];
+
+    const lines = [];
+    lines.push('/* Auto-generated by FSM Grapher */');
+    lines.push('#include <stdint.h>');
+    lines.push('');
+
+    // State enum
+    lines.push('/* States */');
+    lines.push('typedef enum {');
+    realStates.forEach((s, i) => {
+        lines.push(`    STATE_${toEnumName(s.label)}${i < realStates.length - 1 ? ',' : ''}`);
+    });
+    lines.push('} FSMState;');
+    lines.push('');
+
+    // Event enum
+    if (events.length > 0) {
+        lines.push('/* Events */');
+        lines.push('typedef enum {');
+        events.forEach((e, i) => {
+            lines.push(`    EVENT_${toEnumName(e)}${i < events.length - 1 ? ',' : ''}`);
+        });
+        lines.push('} FSMEvent;');
+        lines.push('');
+    }
+
+    // fsm_next_state
+    lines.push('/* Transition table */');
+    lines.push('FSMState fsm_next_state(FSMState current, FSMEvent event) {');
+    lines.push('    switch (current) {');
+    realStates.forEach(s => {
+        const outgoing = transitions.filter(t => t.from === s);
+        if (!outgoing.length) return;
+        lines.push(`        case STATE_${toEnumName(s.label)}:`);
+        outgoing.forEach(t => {
+            const lblLines = t.label.split('\n').map(l => l.trim()).filter(Boolean);
+            if (t.to.isPseudostate) {
+                const branches = resolvePseudoChain(t.to);
+                lblLines.forEach(lbl => {
+                    const evtName = parseEventName(lbl);
+                    if (!evtName) return;
+                    const condPart = lbl.includes('[') ? lbl.substring(lbl.indexOf('[')) : '';
+                    lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
+                    branches.forEach(b => {
+                        const fullCond = [condPart, b.cond].filter(Boolean).join(' && ')
+                            .replace(/\[/g, '(').replace(/\]/g, ')');
+                        if (fullCond) {
+                            lines.push(`                if (${fullCond}) return STATE_${toEnumName(b.target.label)};`);
+                        } else {
+                            lines.push(`                return STATE_${toEnumName(b.target.label)};`);
+                        }
+                    });
+                    lines.push(`            }`);
+                });
+            } else {
+                lblLines.forEach(lbl => {
+                    const evtName = parseEventName(lbl);
+                    if (!evtName) return;
+                    const condPart = lbl.includes('[') ? lbl.substring(lbl.indexOf('[')).replace(/\[/g, '(').replace(/\]/g, ')') : '';
+                    if (condPart) {
+                        lines.push(`            if (event == EVENT_${toEnumName(evtName)} && ${condPart}) return STATE_${toEnumName(t.to.label)};`);
+                    } else {
+                        lines.push(`            if (event == EVENT_${toEnumName(evtName)}) return STATE_${toEnumName(t.to.label)};`);
+                    }
+                });
+            }
+        });
+        lines.push(`            break;`);
+    });
+    lines.push('        default: break;');
+    lines.push('    }');
+    lines.push('    return current; /* No matching transition */');
+    lines.push('}');
+    lines.push('');
+
+    // fsm_entry_action
+    const statesWithActions = realStates.filter(s => s.action && s.action.trim());
+    lines.push('/* Entry actions */');
+    lines.push('void fsm_entry_action(FSMState state) {');
+    if (statesWithActions.length > 0) {
+        lines.push('    switch (state) {');
+        statesWithActions.forEach(s => {
+            lines.push(`        case STATE_${toEnumName(s.label)}:`);
+            s.action.split('\n').forEach(a => { if (a.trim()) lines.push(`            ${a.trim()};`); });
+            lines.push(`            break;`);
+        });
+        lines.push('        default: break;');
+        lines.push('    }');
+    }
+    lines.push('}');
+    lines.push('');
+
+    // fsm_run_action
+    const transWithActions = transitions.filter(t => !t.from.isPseudostate && t.action && t.action.trim());
+    lines.push('/* Transition actions */');
+    lines.push('void fsm_run_action(FSMState from, FSMEvent event, FSMState to) {');
+    if (transWithActions.length > 0) {
+        lines.push('    (void)event;');
+        transWithActions.forEach(t => {
+            lines.push(`    if (from == STATE_${toEnumName(t.from.label)} && to == STATE_${toEnumName(t.to.label)}) {`);
+            t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`        ${a.trim()};`); });
+            lines.push(`    }`);
+        });
+    } else {
+        lines.push('    (void)from; (void)event; (void)to;');
+    }
+    lines.push('}');
+
+    codeOutput.textContent = lines.join('\n');
+    codePanel.classList.remove('hidden');
+}
+
+document.getElementById('genCCodeBtn').onclick = generateCCode;
+document.getElementById('copyCodeBtn').onclick = () => {
+    const text = document.getElementById('codeOutput').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyCodeBtn');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 1500);
+    });
+};
 
 // --- Init ---
 window.addEventListener('resize', resizeCanvas);

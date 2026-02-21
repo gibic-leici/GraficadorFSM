@@ -5,15 +5,39 @@
     --toolbar-bg: #2d2d2d;
     --border-color: #444;
     --input-bg: #3d3d3d;
+
+    /* Canvas & Sim Monochromatic */
+    --canvas-state-fill: #1e1e1e;
+    --canvas-state-stroke: #e0e0e0;
+    --canvas-selected: #4a90e2;
+    --canvas-active: #4d4d4d;
+    --canvas-start: #333333;
+    --canvas-handle: #666;
+    --syntax-cond: #aaaaaa;
+    --syntax-func: #cccccc;
 }
 
 body.light-theme {
     --bg-color: #ffffff;
     --text-color: #000000;
-    --accent-color: #000000;
+    --accent-color: #4a90e2;
     --toolbar-bg: #f5f5f5;
     --border-color: #cccccc;
     --input-bg: #ffffff;
+
+    /* Canvas & Sim Monochromatic */
+    --canvas-state-fill: #ffffff;
+    --canvas-state-stroke: #000000;
+    --canvas-selected: #4a90e2;
+    --canvas-active: #dddddd;
+    --canvas-start: #eeeeee;
+    --canvas-handle: #999;
+    --syntax-cond: #555555;
+    --syntax-func: #888888;
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
@@ -39,6 +63,52 @@ body {
     max-width: 300px;
 }
 
+#codePanel {
+    position: absolute;
+    top: auto;
+    left: 10px;
+    /* top will be set dynamically by JS to sit right below #toolbar */
+    width: 300px;
+    max-height: 320px;
+    z-index: 10;
+}
+
+#codeOutput {
+    background: #000;
+    color: #eee;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.75rem;
+    padding: 8px;
+    border-radius: 4px;
+    overflow-y: auto;
+    flex-grow: 1;
+    min-height: 80px;
+    line-height: 1.5;
+    white-space: pre;
+    margin: 0;
+}
+
+.panel-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 4px;
+}
+
+.panel-header-row .panel-header {
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+
+.btn-small {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
 #toolbar h1 {
     font-size: 1.2rem;
     margin: 0 0 10px 0;
@@ -50,8 +120,8 @@ body {
 .controls {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 15px;
+    gap: 5px;
+    margin-bottom: 10px;
 }
 
 .separator {
@@ -111,50 +181,63 @@ input[type="text"] {
     width: 240px;
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    pointer-events: none;
+    gap: 10px;
+    pointer-events: auto;
     z-index: 100;
     overflow-y: auto;
+    overflow-x: hidden;
     padding-right: 5px;
     /* space for scrollbar */
 }
 
 .panel {
     background-color: var(--toolbar-bg);
-    padding: 15px;
+    padding: 10px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border-color);
     width: 100%;
-    /* Take full sidebar width */
     transition: opacity 0.3s ease;
     pointer-events: auto;
     position: relative;
-    /* Default for sidebar */
+    /* Flex containment for internal overflow control */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Prevent shrinking when sidebar is full */
+    flex-shrink: 0;
+}
+
+.u-hidden {
+    display: none !important;
+}
+
+.u-margin-b-15 {
+    margin-bottom: 15px;
 }
 
 .panel-header {
-    font-size: 1rem;
-    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    margin: 0 0 8px 0;
     color: var(--accent-color);
     border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
+    padding-bottom: 4px;
 }
 
 /* Properties Panel is positioned by its parent #sidebar-right */
 
 #propertiesPanel h3 {
-    font-size: 1rem;
-    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    margin: 0 0 8px 0;
     color: var(--accent-color);
     border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
+    padding-bottom: 4px;
 }
 
 .prop-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
 }
 
 .prop-group label {
@@ -167,9 +250,9 @@ input[type="text"] {
     background-color: var(--input-bg);
     border: 1px solid var(--border-color);
     color: var(--text-color);
-    padding: 8px;
+    padding: 6px;
     border-radius: 4px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     outline: none;
     font-family: inherit;
 }
@@ -213,16 +296,41 @@ canvas {
     margin-top: 5px;
 }
 
+.sim-active-display {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: var(--text-color);
+    opacity: 0.5;
+}
+
+.sim-active-display.is-simulating {
+    color: var(--accent-color);
+    opacity: 1;
+}
+
+.sim-section-label {
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+    color: #999;
+}
+
+.sim-btn-full {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
 .sim-event-btn {
     font-size: 0.75rem;
     padding: 4px;
-    background-color: #666;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
     transition: background-color 0.1s, transform 0.05s;
 }
 
 .sim-event-btn:hover {
     background-color: var(--accent-color);
+    color: white;
 }
 
 .sim-event-btn:active {
@@ -233,18 +341,40 @@ canvas {
 .var-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 5px;
     font-size: 0.85rem;
 }
 
-.var-row input {
+.var-label {
+    min-width: 60px;
+}
+
+.var-input {
     width: 60px;
+    padding: 2px 5px;
+}
+
+.alert-panel-neutral {
+    border-color: var(--border-color);
+}
+
+.alert-header-neutral {
+    color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.alert-list {
+    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 #alertPanel h3 {
-    font-size: 0.9rem;
-    margin: 0 0 8px 0;
-    border-bottom: 1px solid rgba(243, 156, 18, 0.3);
+    font-size: 0.85rem;
+    margin: 0 0 6px 0;
+    border-bottom: 1px solid var(--border-color);
     padding-bottom: 4px;
 }
 
@@ -258,13 +388,13 @@ canvas {
 }
 
 .alert-item.error {
-    background: rgba(231, 76, 60, 0.1);
-    border-left: 3px solid #e74c3c;
+    background: rgba(100, 100, 100, 0.1);
+    border-left: 3px solid #666;
 }
 
 .alert-item.warning {
-    background: rgba(241, 196, 15, 0.1);
-    border-left: 3px solid #f1c40f;
+    background: rgba(150, 150, 150, 0.1);
+    border-left: 3px solid #999;
 }
 
 .alert-icon {
@@ -276,26 +406,24 @@ canvas {
 }
 
 .alert-item.error strong {
-    color: #e74c3c;
+    color: var(--text-color);
 }
 
 .alert-item.warning strong {
-    color: #f1c40f;
+    color: var(--text-color);
 }
 
 #consolePanel {
-    position: absolute;
-    top: 10px;
-    right: 260px;
-    /* Adjusted to be next to sidebar */
-    width: 240px;
-    max-height: 300px;
+    /* Adjusted to be part of sidebar flow */
+    width: 100%;
+    max-height: 250px;
     z-index: 101;
+    flex-shrink: 0;
 }
 
 #consoleLog {
     background: #000;
-    color: #0f0;
+    color: #eee;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.8rem;
     padding: 8px;
@@ -304,6 +432,16 @@ canvas {
     flex-grow: 1;
     min-height: 100px;
     line-height: 1.4;
+    /* Ensure it doesn't push the panel height */
+    max-height: 100%;
+}
+
+.console-line-event {
+    opacity: 0.7;
+}
+
+.console-line-error {
+    font-weight: bold;
 }
 
 #consoleLog div {

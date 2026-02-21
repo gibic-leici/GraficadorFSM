@@ -20,9 +20,9 @@
             <button id="exportBtn">Export as File</button>
             <button id="importBtn">Import from File</button>
             <button id="exportPngBtn">Export Image (PNG)</button>
-            <input type="file" id="fileInput" style="display:none" accept=".json">
+            <input type="file" id="fileInput" class="u-hidden" accept=".json">
             <div class="separator"></div>
-            <!-- Simulation Panel Placeholder (handled in sidebar) -->
+            <button id="genCCodeBtn">Generate C Code</button>
         </div>
         <div class="instructions">
             <p><strong>Click "Add State"</strong> to create a new state.</p>
@@ -32,6 +32,14 @@
             <p><strong>Click</strong> states/transitions to edit properties.</p>
             <p><strong>Alt + Click</strong> to set Start State.</p>
         </div>
+    </div>
+    <!-- C Code Output Panel (below toolbar) -->
+    <div id="codePanel" class="panel hidden" id="codePanel">
+        <div class="panel-header-row">
+            <h3 class="panel-header">Generated C Code</h3>
+            <button id="copyCodeBtn" class="btn-small">Copy</button>
+        </div>
+        <pre id="codeOutput"></pre>
     </div>
     <div id="canvas-container">
         <canvas id="fsmCanvas"></canvas>
@@ -58,31 +66,30 @@
             <div id="noSelectionMsg">Select an item to edit properties</div>
         </div>
 
-        <!-- Simulation Panel -->
         <div id="simPanel" class="panel">
             <h3 class="panel-header">Simulation</h3>
             <div class="prop-group">
-                <div id="activeStateDisplay" style="font-weight: bold; margin-bottom: 10px;">Active: (None)</div>
-                <button id="startSimBtn" style="width: 100%; margin-bottom: 10px;">Start Simulation</button>
+                <div id="activeStateDisplay" class="sim-active-display">Active: (None)</div>
+                <button id="startSimBtn" class="sim-btn-full">Start Simulation</button>
 
-                <div style="font-size: 0.9rem; margin-bottom: 5px; color: #999;">Variables:</div>
-                <div id="varsList" style="margin-bottom: 15px;"></div>
+                <div class="sim-section-label">Variables:</div>
+                <div id="varsList" class="u-margin-b-15"></div>
 
-                <div style="font-size: 0.9rem; margin-bottom: 5px; color: #999;">Events:</div>
+                <div class="sim-section-label">Events:</div>
                 <div id="eventsList" class="sim-buttons-grid"></div>
             </div>
         </div>
 
-        <div id="alertPanel" class="panel hidden" style="border-color: #f39c12;">
-            <h3 class="panel-header" style="color: #f39c12; margin-bottom: 8px;">Warnings</h3>
-            <div id="alertsList" style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px;"></div>
+        <div id="alertPanel" class="panel hidden alert-panel-neutral">
+            <h3 class="panel-header alert-header-neutral">Warnings</h3>
+            <div id="alertsList" class="alert-list"></div>
         </div>
-    </div>
 
-    <!-- Console Panel -->
-    <div id="consolePanel" class="panel hidden">
-        <h3 class="panel-header">Action Log</h3>
-        <div id="consoleLog"></div>
+        <!-- Console Panel moved inside sidebar -->
+        <div id="consolePanel" class="panel hidden">
+            <h3 class="panel-header">Action Log</h3>
+            <div id="consoleLog"></div>
+        </div>
     </div>
     <script src="js/models.js"></script>
     <script src="script.js"></script>
