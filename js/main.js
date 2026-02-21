@@ -94,6 +94,7 @@ document.getElementById('exportBtn').onclick = exportJSON;
 document.getElementById('importBtn').onclick = () => document.getElementById('fileInput').click();
 document.getElementById('fileInput').onchange = importJSON;
 document.getElementById('exportPngBtn').onclick = exportPNG;
+document.getElementById('exportSvgBtn').onclick = exportSVG;
 startSimBtn.onclick = () => { if (isSimulating) resetSimulation(); else startSimulation(); };
 
 document.getElementById('genCCodeBtn').onclick = generateCCode;
