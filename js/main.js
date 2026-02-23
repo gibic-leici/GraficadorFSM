@@ -63,6 +63,11 @@ transActionInput.addEventListener('input', () => {
         refreshSimVariables();
         updateSimUI();
         validatePseudostates();
+    } else if (selectedObject && selectedObject.type === 'startTransition') {
+        selectedObject.state.startAction = transActionInput.value;
+        refreshSimVariables();
+        updateSimUI();
+        validatePseudostates();
     }
 });
 
@@ -93,8 +98,12 @@ document.getElementById('deleteBtn').onclick = () => {
             transitions = transitions.filter(t => t.from !== selectedObject && t.to !== selectedObject);
             if (startState === selectedObject) startState = null;
             if (activeState === selectedObject) resetSimulation();
-        } else {
+        } else if (selectedObject instanceof Transition) {
             transitions = transitions.filter(t => t !== selectedObject);
+        } else if (selectedObject.type === 'startTransition') {
+            selectedObject.state.isStart = false;
+            selectedObject.state.startAction = "";
+            if (startState === selectedObject.state) startState = null;
         }
         select(null);
         refreshSimVariables();

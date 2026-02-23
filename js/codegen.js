@@ -172,6 +172,22 @@ function generateCCode() {
     lines.push('    return next;');
     lines.push('}');
 
+    const startObj = states.find(s => s.isStart);
+    if (startObj) {
+        lines.push('');
+        lines.push('/* Initialize FSM */');
+        lines.push('FSMState fsm_init(void) {');
+        lines.push(`    FSMState initial = STATE_${toEnumName(startObj.label)};`);
+        if (startObj.startAction) {
+            startObj.startAction.split('\n').forEach(a => { if (a.trim()) lines.push(`    ${a.trim()};`); });
+        }
+        if (startObj.action) {
+            startObj.action.split('\n').forEach(a => { if (a.trim()) lines.push(`    ${a.trim()};`); });
+        }
+        lines.push('    return initial;');
+        lines.push('}');
+    }
+
     codeOutput.textContent = lines.join('\n');
     codePanel.classList.remove('hidden');
 }

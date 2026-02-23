@@ -88,6 +88,20 @@ function updatePropertiesPanel() {
             transEventInput.placeholder = "e.g. signal";
             transConditionInput.placeholder = "e.g. [x>5]";
         }
+    } else if (selectedObject.type === 'startTransition') {
+        transProps.classList.remove('hidden');
+
+        transEventInput.value = "";
+        transConditionInput.value = "";
+        transActionInput.value = selectedObject.state.startAction || "";
+
+        const eventLabelNode = transEventInput.previousElementSibling;
+        const condLabelNode = transConditionInput.previousElementSibling;
+
+        eventLabelNode.classList.add('u-hidden');
+        transEventInput.classList.add('u-hidden');
+        condLabelNode.classList.add('u-hidden');
+        transConditionInput.classList.add('u-hidden');
     }
 }
 
@@ -135,7 +149,10 @@ function refreshSimVariables() {
         });
     };
 
-    states.forEach(s => scanActions(s.action));
+    states.forEach(s => {
+        scanActions(s.action);
+        if (s.isStart && s.startAction) scanActions(s.startAction);
+    });
     transitions.forEach(t => scanActions(t.action));
 
     // Remove ghost variables

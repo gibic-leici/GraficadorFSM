@@ -6,7 +6,7 @@ function exportJSON() {
     const data = {
         states: states.map(s => ({
             id: s.id, x: s.x, y: s.y, label: s.label,
-            action: s.action, radius: s.radius, isStart: s.isStart,
+            action: s.action, startAction: s.startAction, radius: s.radius, isStart: s.isStart,
             isPseudostate: !!s.isPseudostate
         })),
         transitions: transitions.map(t => ({
@@ -46,6 +46,7 @@ function importJSON(e) {
                 const s = new State(sData.x, sData.y, sData.id, sData.isPseudostate);
                 s.label = sData.label;
                 s.action = sData.action;
+                s.startAction = sData.startAction || "";
                 s.radius = sData.radius || (sData.isPseudostate ? 18 : STATE_RADIUS);
                 s.isStart = sData.isStart;
                 if (s.isStart) startState = s;

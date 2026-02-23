@@ -96,18 +96,27 @@ canvas.addEventListener('mousedown', e => {
         return;
     }
 
-    const hitState = states.slice().reverse().find(s => s.isHit(mx, my));
-    if (e.shiftKey && hitState) {
+    let hitStatePart = null;
+    const hitState = states.slice().reverse().find(s => {
+        hitStatePart = s.getHitPart(mx, my);
+        return hitStatePart !== null;
+    });
+
+    if (e.shiftKey && hitState && hitStatePart === 'state') {
         creatingTransition = { from: hitState, to: { x: mx, y: my } };
         return;
     }
-    if (e.altKey && hitState) {
+    if (e.altKey && hitState && hitStatePart === 'state') {
         states.forEach(s => s.isStart = false);
         hitState.isStart = true;
         startState = hitState;
         return;
     }
     if (hitState) {
+        if (hitStatePart === 'startTransition') {
+            select({ type: 'startTransition', state: hitState });
+            return;
+        }
         draggingState = hitState;
         select(hitState);
         return;
@@ -220,6 +229,14 @@ window.addEventListener('keydown', e => {
                 select(null);
             } else if (selectedObject instanceof Transition) {
                 transitions = transitions.filter(t => t !== selectedObject);
+                refreshSimVariables();
+                updateSimUI();
+                validatePseudostates();
+                select(null);
+            } else if (selectedObject.type === 'startTransition') {
+                selectedObject.state.isStart = false;
+                selectedObject.state.startAction = "";
+                if (startState === selectedObject.state) startState = null;
                 refreshSimVariables();
                 updateSimUI();
                 validatePseudostates();

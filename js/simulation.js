@@ -22,7 +22,7 @@ function startSimulation() {
         toX: startState.x - startState.radius,
         toY: startState.y,
         to: startState,
-        action: null
+        action: startState.startAction || null
     };
 
     activeState = null;
