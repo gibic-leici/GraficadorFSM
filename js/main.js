@@ -33,6 +33,20 @@ transEventInput.addEventListener('input', () => {
     }
 });
 
+transEventInput.addEventListener('change', () => {
+    if (selectedObject instanceof Transition && selectedObject.from.isPseudostate) {
+        let val = transEventInput.value.trim();
+        if (val && !(val.startsWith('[') && val.endsWith(']'))) {
+            val = `[${val}]`;
+            transEventInput.value = val;
+            selectedObject.label = val;
+            refreshSimVariables();
+            updateSimUI();
+            validatePseudostates();
+        }
+    }
+});
+
 transActionInput.addEventListener('input', () => {
     if (selectedObject instanceof Transition) {
         selectedObject.action = transActionInput.value;

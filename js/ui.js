@@ -66,15 +66,27 @@ function updatePropertiesPanel() {
 function refreshSimVariables() {
     const varRegex = /\b[a-zA-Z_]\w*\b/g;
     const keywords = new Set(['true', 'false', 'null', 'Math', 'and', 'or', 'not']);
+    const activeVars = new Set();
 
     transitions.forEach(t => {
-        const match = /\[(.*?)\]/.exec(t.label);
-        if (match) {
+        let condString = "";
+        if (t.from.isPseudostate) {
+            const raw = t.label.trim();
+            condString = (raw.startsWith('[') && raw.endsWith(']'))
+                ? raw.substring(1, raw.length - 1)
+                : raw;
+        } else {
+            const match = /\[(.*?)\]/.exec(t.label);
+            if (match) condString = match[1];
+        }
+
+        if (condString) {
             let m;
-            while ((m = varRegex.exec(match[1])) !== null) {
+            while ((m = varRegex.exec(condString)) !== null) {
                 let v = m[0];
-                if (!keywords.has(v) && simContext[v] === undefined) {
-                    simContext[v] = 0;
+                if (!keywords.has(v)) {
+                    activeVars.add(v);
+                    if (simContext[v] === undefined) simContext[v] = 0;
                 }
             }
         }
@@ -87,8 +99,9 @@ function refreshSimVariables() {
             const parts = line.split('=');
             if (parts.length === 2) {
                 const varName = parts[0].trim();
-                if (varRegex.test(varName) && !keywords.has(varName) && simContext[varName] === undefined) {
-                    simContext[varName] = 0;
+                if (varRegex.test(varName) && !keywords.has(varName)) {
+                    activeVars.add(varName);
+                    if (simContext[varName] === undefined) simContext[varName] = 0;
                 }
             }
         });
@@ -96,6 +109,13 @@ function refreshSimVariables() {
 
     states.forEach(s => scanActions(s.action));
     transitions.forEach(t => scanActions(t.action));
+
+    // Remove ghost variables
+    Object.keys(simContext).forEach(key => {
+        if (!activeVars.has(key)) {
+            delete simContext[key];
+        }
+    });
 }
 
 function updateSimUI() {

@@ -73,8 +73,14 @@ function performTransition(t) {
 
     if (t.action) executeAction(t.action);
 
-    const anim = new TransitionAnimation(t);
-    animations.push(anim);
+    let delay = 0;
+    // Pseudostates resolve instantly without animation
+    const isFromPseudo = t.from && t.from.isPseudostate;
+    if (!isFromPseudo) {
+        const anim = new TransitionAnimation(t);
+        animations.push(anim);
+        delay = anim.duration;
+    }
 
     updateSimUI();
 
@@ -83,11 +89,14 @@ function performTransition(t) {
         activeState = t.to;
         if (activeState.action) executeAction(activeState.action);
         updateSimUI();
+        validatePseudostates();
 
         if (activeState.isPseudostate) {
-            executeSimulationStep();
+            // Use setTimeout to yield the stack to prevent max call stack
+            // blowing up if there's a 0-delay infinite loop of pseudostates
+            setTimeout(executeSimulationStep, 0);
         }
-    }, anim.duration);
+    }, delay);
 }
 
 function executeSimulationStep() {
@@ -98,8 +107,10 @@ function executeSimulationStep() {
 
         const condTransitions = outgoing.filter(t => t.label.trim() !== "" && t.label.trim() !== "[]");
         const metConds = condTransitions.filter(t => {
-            const parts = t.label.split('[');
-            const cond = parts.length >= 2 ? parts[1].split(']')[0].trim() : "";
+            const raw = t.label.trim();
+            const cond = (raw.startsWith('[') && raw.endsWith(']'))
+                ? raw.substring(1, raw.length - 1)
+                : raw;
             return evaluateCondition(cond);
         });
 
@@ -137,8 +148,10 @@ function validatePseudostates() {
 
         let validCondCount = 0;
         condTransitions.forEach(t => {
-            const parts = t.label.split('[');
-            const cond = parts.length >= 2 ? parts[1].split(']')[0].trim() : "";
+            const raw = t.label.trim();
+            const cond = (raw.startsWith('[') && raw.endsWith(']'))
+                ? raw.substring(1, raw.length - 1)
+                : raw;
             if (evaluateCondition(cond)) validCondCount++;
         });
 
@@ -181,7 +194,7 @@ function evaluateCondition(cond) {
         const func = new Function(...keys, `return ${cond};`);
         return !!func(...vals);
     } catch (e) {
-        console.error("Condition eval error:", e);
+        // Silently fail evaluation while user is typing incomplete conditions
         return false;
     }
 }
@@ -222,5 +235,4 @@ function executeAction(action) {
             logToConsole(`Error: ${e.message}`, "error");
         }
     });
-    validatePseudostates();
 }

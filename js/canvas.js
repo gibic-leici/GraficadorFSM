@@ -189,10 +189,19 @@ canvas.addEventListener('dblclick', e => {
     const hitTrans = transitions.slice().reverse().find(t => t.isHit(mx, my));
     if (hitTrans) {
         const promptMsg = hitTrans.from.isPseudostate ? "Enter condition:" : "Enter event name:";
-        const newLabel = prompt(promptMsg, hitTrans.label);
+        let newLabel = prompt(promptMsg, hitTrans.label);
         if (newLabel !== null) {
+            if (hitTrans.from.isPseudostate) {
+                let trimmed = newLabel.trim();
+                if (trimmed && !(trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    newLabel = `[${trimmed}]`;
+                }
+            }
             hitTrans.label = newLabel;
             updatePropertiesPanel();
+            refreshSimVariables();
+            updateSimUI();
+            validatePseudostates();
         }
     }
 });
