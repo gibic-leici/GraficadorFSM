@@ -6,7 +6,7 @@ function exportJSON() {
     const data = {
         states: states.map(s => ({
             id: s.id, x: s.x, y: s.y, label: s.label,
-            action: s.action, radius: s.radius, isStart: s.isStart,
+            action: s.action, startAction: s.startAction, radius: s.radius, isStart: s.isStart,
             isPseudostate: !!s.isPseudostate
         })),
         transitions: transitions.map(t => ({
@@ -41,22 +41,33 @@ function importJSON(e) {
             activeState = null;
             isSimulating = false;
 
-            data.states.forEach(sData => {
+            const statesData = Array.isArray(data.states) ? data.states : [];
+            statesData.forEach(sData => {
                 const s = new State(sData.x, sData.y, sData.id, sData.isPseudostate);
                 s.label = sData.label;
                 s.action = sData.action;
+                s.startAction = sData.startAction || "";
                 s.radius = sData.radius || (sData.isPseudostate ? 18 : STATE_RADIUS);
                 s.isStart = sData.isStart;
                 if (s.isStart) startState = s;
                 states.push(s);
             });
 
-            data.transitions.forEach(tData => {
+            const transData = Array.isArray(data.transitions) ? data.transitions : [];
+            transData.forEach(tData => {
                 const from = states.find(s => s.id === tData.from);
                 const to = states.find(s => s.id === tData.to);
                 if (from && to) {
                     const t = new Transition(from, to);
-                    t.label = tData.label;
+                    if (from.isPseudostate && tData.label) {
+                        let trimmed = tData.label.trim();
+                        if (trimmed && !(trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                            trimmed = `[${trimmed}]`;
+                        }
+                        t.label = trimmed;
+                    } else {
+                        t.label = tData.label;
+                    }
                     t.action = tData.action;
                     t.controlOffset = tData.controlOffset || { x: 0, y: 0 };
                     t.startAnchorAngle = tData.startAnchorAngle;

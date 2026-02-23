@@ -12,6 +12,7 @@ const stateNameInput = document.getElementById('stateName');
 const stateActionInput = document.getElementById('stateAction');
 const stateRadiusInput = document.getElementById('stateRadius');
 const transEventInput = document.getElementById('transEvent');
+const transConditionInput = document.getElementById('transCondition');
 const transActionInput = document.getElementById('transAction');
 
 const simPanel = document.getElementById('simPanel');
@@ -47,34 +48,87 @@ function updatePropertiesPanel() {
 
     } else if (selectedObject instanceof Transition) {
         transProps.classList.remove('hidden');
-        transEventInput.value = selectedObject.label || "";
+
+        let eventStr = "";
+        let condStr = "";
+
+        if (selectedObject.from.isPseudostate) {
+            condStr = selectedObject.label || "";
+        } else {
+            const rawLabel = selectedObject.label || "";
+            const bracketIdx = rawLabel.indexOf('[');
+            if (bracketIdx !== -1) {
+                eventStr = rawLabel.substring(0, bracketIdx).trim();
+                condStr = rawLabel.substring(bracketIdx).trim();
+            } else {
+                eventStr = rawLabel.trim();
+            }
+        }
+
+        transEventInput.value = eventStr;
+        transConditionInput.value = condStr;
         transActionInput.value = selectedObject.action || "";
 
-        const labelNode = transEventInput.previousElementSibling;
+        const eventLabelNode = transEventInput.previousElementSibling;
+        const condLabelNode = transConditionInput.previousElementSibling;
+
         if (selectedObject.from.isPseudostate) {
-            labelNode.innerText = "Condition(s):";
-            transEventInput.placeholder = "e.g. x > 5";
+            eventLabelNode.classList.add('u-hidden');
+            transEventInput.classList.add('u-hidden');
+
+            condLabelNode.classList.remove('u-hidden');
+            transConditionInput.classList.remove('u-hidden');
+            transConditionInput.placeholder = "e.g. x > 5";
         } else {
-            labelNode.innerText = "Event(s):";
-            transEventInput.placeholder = "e.g. signal[x>5]";
+            eventLabelNode.classList.remove('u-hidden');
+            transEventInput.classList.remove('u-hidden');
+
+            condLabelNode.classList.remove('u-hidden');
+            transConditionInput.classList.remove('u-hidden');
+            transEventInput.placeholder = "e.g. signal";
+            transConditionInput.placeholder = "e.g. [x>5]";
         }
-        labelNode.classList.remove('u-hidden');
-        transEventInput.classList.remove('u-hidden');
+    } else if (selectedObject.type === 'startTransition') {
+        transProps.classList.remove('hidden');
+
+        transEventInput.value = "";
+        transConditionInput.value = "";
+        transActionInput.value = selectedObject.state.startAction || "";
+
+        const eventLabelNode = transEventInput.previousElementSibling;
+        const condLabelNode = transConditionInput.previousElementSibling;
+
+        eventLabelNode.classList.add('u-hidden');
+        transEventInput.classList.add('u-hidden');
+        condLabelNode.classList.add('u-hidden');
+        transConditionInput.classList.add('u-hidden');
     }
 }
 
 function refreshSimVariables() {
     const varRegex = /\b[a-zA-Z_]\w*\b/g;
     const keywords = new Set(['true', 'false', 'null', 'Math', 'and', 'or', 'not']);
+    const activeVars = new Set();
 
     transitions.forEach(t => {
-        const match = /\[(.*?)\]/.exec(t.label);
-        if (match) {
+        let condString = "";
+        if (t.from.isPseudostate) {
+            const raw = t.label.trim();
+            condString = (raw.startsWith('[') && raw.endsWith(']'))
+                ? raw.substring(1, raw.length - 1)
+                : raw;
+        } else {
+            const match = /\[(.*?)\]/.exec(t.label);
+            if (match) condString = match[1];
+        }
+
+        if (condString) {
             let m;
-            while ((m = varRegex.exec(match[1])) !== null) {
+            while ((m = varRegex.exec(condString)) !== null) {
                 let v = m[0];
-                if (!keywords.has(v) && simContext[v] === undefined) {
-                    simContext[v] = 0;
+                if (!keywords.has(v)) {
+                    activeVars.add(v);
+                    if (simContext[v] === undefined) simContext[v] = 0;
                 }
             }
         }
@@ -87,15 +141,26 @@ function refreshSimVariables() {
             const parts = line.split('=');
             if (parts.length === 2) {
                 const varName = parts[0].trim();
-                if (varRegex.test(varName) && !keywords.has(varName) && simContext[varName] === undefined) {
-                    simContext[varName] = 0;
+                if (varRegex.test(varName) && !keywords.has(varName)) {
+                    activeVars.add(varName);
+                    if (simContext[varName] === undefined) simContext[varName] = 0;
                 }
             }
         });
     };
 
-    states.forEach(s => scanActions(s.action));
+    states.forEach(s => {
+        scanActions(s.action);
+        if (s.isStart && s.startAction) scanActions(s.startAction);
+    });
     transitions.forEach(t => scanActions(t.action));
+
+    // Remove ghost variables
+    Object.keys(simContext).forEach(key => {
+        if (!activeVars.has(key)) {
+            delete simContext[key];
+        }
+    });
 }
 
 function updateSimUI() {

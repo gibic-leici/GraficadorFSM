@@ -23,7 +23,7 @@ function resolvePseudoChain(pseudo) {
             const sub = resolvePseudoChain(t.to);
             sub.forEach(b => branches.push({
                 cond: cond ? `${cond} && ${b.cond}` : b.cond,
-                target: b.target, action: t.action || b.action
+                target: b.target, action: [t.action, b.action].filter(Boolean).join('\n')
             }));
         } else {
             branches.push({ cond, target: t.to, action: t.action });
@@ -90,9 +90,10 @@ function generateCCode() {
         lines.push('');
     }
 
-    // fsm_next_state
-    lines.push('/* Transition table */');
-    lines.push('FSMState fsm_next_state(FSMState current, FSMEvent event) {');
+    // fsm_process_event
+    lines.push('/* Process event and execute actions */');
+    lines.push('FSMState fsm_process_event(FSMState current, FSMEvent event) {');
+    lines.push('    FSMState next = current;');
     lines.push('    switch (current) {');
     realStates.forEach(s => {
         const outgoing = transitions.filter(t => t.from === s);
@@ -111,10 +112,21 @@ function generateCCode() {
                         const fullCond = [condPart, b.cond].filter(Boolean).join(' && ')
                             .replace(/\[/g, '(').replace(/\]/g, ')');
                         if (fullCond) {
-                            lines.push(`                if (${fullCond}) return STATE_${toEnumName(b.target.label)};`);
+                            lines.push(`                if (${fullCond}) {`);
                         } else {
-                            lines.push(`                return STATE_${toEnumName(b.target.label)};`);
+                            lines.push(`                {`);
                         }
+
+                        if (t.action) {
+                            t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
+                        }
+                        if (b.action) {
+                            b.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
+                        }
+
+                        lines.push(`                    next = STATE_${toEnumName(b.target.label)};`);
+                        lines.push(`                    break;`);
+                        lines.push(`                }`);
                     });
                     lines.push(`            }`);
                 });
@@ -124,10 +136,16 @@ function generateCCode() {
                     if (!evtName) return;
                     const condPart = lbl.includes('[') ? lbl.substring(lbl.indexOf('[')).replace(/\[/g, '(').replace(/\]/g, ')') : '';
                     if (condPart) {
-                        lines.push(`            if (event == EVENT_${toEnumName(evtName)} && ${condPart}) return STATE_${toEnumName(t.to.label)};`);
+                        lines.push(`            if (event == EVENT_${toEnumName(evtName)} && ${condPart}) {`);
                     } else {
-                        lines.push(`            if (event == EVENT_${toEnumName(evtName)}) return STATE_${toEnumName(t.to.label)};`);
+                        lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
                     }
+                    if (t.action) {
+                        t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                ${a.trim()};`); });
+                    }
+                    lines.push(`                next = STATE_${toEnumName(t.to.label)};`);
+                    lines.push(`                break;`);
+                    lines.push(`            }`);
                 });
             }
         });
@@ -135,42 +153,40 @@ function generateCCode() {
     });
     lines.push('        default: break;');
     lines.push('    }');
-    lines.push('    return current; /* No matching transition */');
-    lines.push('}');
-    lines.push('');
 
-    // fsm_entry_action
+    // Entry actions
+    lines.push('');
+    lines.push('    if (next != current) {');
     const statesWithActions = realStates.filter(s => s.action && s.action.trim());
-    lines.push('/* Entry actions */');
-    lines.push('void fsm_entry_action(FSMState state) {');
     if (statesWithActions.length > 0) {
-        lines.push('    switch (state) {');
+        lines.push('        switch (next) {');
         statesWithActions.forEach(s => {
-            lines.push(`        case STATE_${toEnumName(s.label)}:`);
-            s.action.split('\n').forEach(a => { if (a.trim()) lines.push(`            ${a.trim()};`); });
-            lines.push(`            break;`);
+            lines.push(`            case STATE_${toEnumName(s.label)}:`);
+            s.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                ${a.trim()};`); });
+            lines.push(`                break;`);
         });
-        lines.push('        default: break;');
-        lines.push('    }');
+        lines.push('            default: break;');
+        lines.push('        }');
     }
+    lines.push('    }');
+    lines.push('    return next;');
     lines.push('}');
-    lines.push('');
 
-    // fsm_run_action
-    const transWithActions = transitions.filter(t => !t.from.isPseudostate && t.action && t.action.trim());
-    lines.push('/* Transition actions */');
-    lines.push('void fsm_run_action(FSMState from, FSMEvent event, FSMState to) {');
-    if (transWithActions.length > 0) {
-        lines.push('    (void)event;');
-        transWithActions.forEach(t => {
-            lines.push(`    if (from == STATE_${toEnumName(t.from.label)} && to == STATE_${toEnumName(t.to.label)}) {`);
-            t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`        ${a.trim()};`); });
-            lines.push(`    }`);
-        });
-    } else {
-        lines.push('    (void)from; (void)event; (void)to;');
+    const startObj = states.find(s => s.isStart);
+    if (startObj) {
+        lines.push('');
+        lines.push('/* Initialize FSM */');
+        lines.push('FSMState fsm_init(void) {');
+        lines.push(`    FSMState initial = STATE_${toEnumName(startObj.label)};`);
+        if (startObj.startAction) {
+            startObj.startAction.split('\n').forEach(a => { if (a.trim()) lines.push(`    ${a.trim()};`); });
+        }
+        if (startObj.action) {
+            startObj.action.split('\n').forEach(a => { if (a.trim()) lines.push(`    ${a.trim()};`); });
+        }
+        lines.push('    return initial;');
+        lines.push('}');
     }
-    lines.push('}');
 
     codeOutput.textContent = lines.join('\n');
     codePanel.classList.remove('hidden');

@@ -24,18 +24,47 @@ stateRadiusInput.addEventListener('input', () => {
     }
 });
 
-transEventInput.addEventListener('input', () => {
+function updateTransitionLabel() {
     if (selectedObject instanceof Transition) {
-        selectedObject.label = transEventInput.value;
+        let cond = transConditionInput.value.trim();
+        if (cond && !cond.startsWith('[')) cond = `[${cond}`;
+        if (cond && !cond.endsWith(']')) cond = `${cond}]`;
+
+        if (selectedObject.from.isPseudostate) {
+            selectedObject.label = cond;
+        } else {
+            let evt = transEventInput.value.trim();
+            selectedObject.label = evt + cond;
+        }
         refreshSimVariables();
         updateSimUI();
         validatePseudostates();
+    }
+}
+
+transEventInput.addEventListener('input', updateTransitionLabel);
+transConditionInput.addEventListener('input', updateTransitionLabel);
+
+transConditionInput.addEventListener('change', () => {
+    if (selectedObject instanceof Transition) {
+        let val = transConditionInput.value.trim();
+        if (val && !val.startsWith('[')) val = `[${val}`;
+        if (val && !val.endsWith(']')) val = `${val}]`;
+        if (transConditionInput.value !== val) {
+            transConditionInput.value = val;
+            updateTransitionLabel();
+        }
     }
 });
 
 transActionInput.addEventListener('input', () => {
     if (selectedObject instanceof Transition) {
         selectedObject.action = transActionInput.value;
+        refreshSimVariables();
+        updateSimUI();
+        validatePseudostates();
+    } else if (selectedObject && selectedObject.type === 'startTransition') {
+        selectedObject.state.startAction = transActionInput.value;
         refreshSimVariables();
         updateSimUI();
         validatePseudostates();
@@ -69,8 +98,12 @@ document.getElementById('deleteBtn').onclick = () => {
             transitions = transitions.filter(t => t.from !== selectedObject && t.to !== selectedObject);
             if (startState === selectedObject) startState = null;
             if (activeState === selectedObject) resetSimulation();
-        } else {
+        } else if (selectedObject instanceof Transition) {
             transitions = transitions.filter(t => t !== selectedObject);
+        } else if (selectedObject.type === 'startTransition') {
+            selectedObject.state.isStart = false;
+            selectedObject.state.startAction = "";
+            if (startState === selectedObject.state) startState = null;
         }
         select(null);
         refreshSimVariables();

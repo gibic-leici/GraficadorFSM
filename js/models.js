@@ -98,6 +98,7 @@ class State {
         this.id = id;
         this.label = isPseudo ? "" : `q${id}`;
         this.action = "";
+        this.startAction = "";
         this.radius = isPseudo ? 18 : STATE_RADIUS;
         this.isStart = false;
         this.isPseudostate = isPseudo;
@@ -137,18 +138,20 @@ class State {
             const dotY = this.y;
             const arrowEndX = this.x - this.radius;
 
+            const isSelectedTransition = selectedObject && selectedObject.type === 'startTransition' && selectedObject.state === this;
+
             // Draw start dot
             ctx.beginPath();
             ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
-            ctx.fillStyle = theme.transition;
+            ctx.fillStyle = isSelectedTransition ? theme.selected : theme.transition;
             ctx.fill();
 
             // Draw line to state
             ctx.beginPath();
             ctx.moveTo(dotX, dotY);
             ctx.lineTo(arrowEndX, dotY);
-            ctx.strokeStyle = theme.transition;
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = isSelectedTransition ? theme.selected : theme.transition;
+            ctx.lineWidth = isSelectedTransition ? 3 : 2;
             ctx.stroke();
 
             // Draw arrowhead correctly at the edge
@@ -157,8 +160,18 @@ class State {
             ctx.lineTo(arrowEndX - 8, dotY - 5);
             ctx.lineTo(arrowEndX - 8, dotY + 5);
             ctx.closePath();
-            ctx.fillStyle = theme.transition;
+            ctx.fillStyle = isSelectedTransition ? theme.selected : theme.transition;
             ctx.fill();
+
+            if (this.startAction) {
+                const labelX = dotX + (arrowEndX - dotX) / 2;
+                const labelY = dotY - 15;
+                const dims = drawMultilineText(ctx, "/ " + this.startAction, labelX, labelY, 14, theme.labelColor, theme.labelBg, true);
+                this.startTextWidth = dims.width;
+                this.startTextHeight = dims.height;
+                this.startLabelX = labelX;
+                this.startLabelY = labelY;
+            }
         }
 
         if (selectedObject === this) {
@@ -210,6 +223,28 @@ class State {
         const hitMargin = this.isPseudostate ? 5 : 0;
         const totalRadius = this.radius + hitMargin;
         return dx * dx + dy * dy < totalRadius * totalRadius;
+    }
+
+    getHitPart(x, y) {
+        if (this.isStart) {
+            const dotX = this.x - this.radius - 35;
+            const dotY = this.y;
+            const arrowEndX = this.x - this.radius;
+            if (x >= dotX - 10 && x <= arrowEndX + 10 && y >= dotY - 20 && y <= dotY + 20) {
+                return 'startTransition';
+            }
+            if (this.startAction) {
+                const lx = this.startLabelX;
+                const ly = this.startLabelY;
+                const tw = this.startTextWidth / 2 + 5;
+                const th = this.startTextHeight / 2 + 5;
+                if (x > lx - tw && x < lx + tw && y > ly - th && y < ly + th) {
+                    return 'startTransition';
+                }
+            }
+        }
+        if (this.isHit(x, y)) return 'state';
+        return null;
     }
 }
 
