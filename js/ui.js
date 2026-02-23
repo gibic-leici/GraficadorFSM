@@ -12,6 +12,7 @@ const stateNameInput = document.getElementById('stateName');
 const stateActionInput = document.getElementById('stateAction');
 const stateRadiusInput = document.getElementById('stateRadius');
 const transEventInput = document.getElementById('transEvent');
+const transConditionInput = document.getElementById('transCondition');
 const transActionInput = document.getElementById('transAction');
 
 const simPanel = document.getElementById('simPanel');
@@ -47,19 +48,46 @@ function updatePropertiesPanel() {
 
     } else if (selectedObject instanceof Transition) {
         transProps.classList.remove('hidden');
-        transEventInput.value = selectedObject.label || "";
+
+        let eventStr = "";
+        let condStr = "";
+
+        if (selectedObject.from.isPseudostate) {
+            condStr = selectedObject.label || "";
+        } else {
+            const rawLabel = selectedObject.label || "";
+            const bracketIdx = rawLabel.indexOf('[');
+            if (bracketIdx !== -1) {
+                eventStr = rawLabel.substring(0, bracketIdx).trim();
+                condStr = rawLabel.substring(bracketIdx).trim();
+            } else {
+                eventStr = rawLabel.trim();
+            }
+        }
+
+        transEventInput.value = eventStr;
+        transConditionInput.value = condStr;
         transActionInput.value = selectedObject.action || "";
 
-        const labelNode = transEventInput.previousElementSibling;
+        const eventLabelNode = transEventInput.previousElementSibling;
+        const condLabelNode = transConditionInput.previousElementSibling;
+
         if (selectedObject.from.isPseudostate) {
-            labelNode.innerText = "Condition(s):";
-            transEventInput.placeholder = "e.g. x > 5";
+            eventLabelNode.classList.add('u-hidden');
+            transEventInput.classList.add('u-hidden');
+
+            condLabelNode.classList.remove('u-hidden');
+            transConditionInput.classList.remove('u-hidden');
+            transConditionInput.placeholder = "e.g. x > 5";
         } else {
-            labelNode.innerText = "Event(s):";
-            transEventInput.placeholder = "e.g. signal[x>5]";
+            eventLabelNode.classList.remove('u-hidden');
+            transEventInput.classList.remove('u-hidden');
+
+            condLabelNode.classList.remove('u-hidden');
+            transConditionInput.classList.remove('u-hidden');
+            transEventInput.placeholder = "e.g. signal";
+            transConditionInput.placeholder = "e.g. [x>5]";
         }
-        labelNode.classList.remove('u-hidden');
-        transEventInput.classList.remove('u-hidden');
     }
 }
 

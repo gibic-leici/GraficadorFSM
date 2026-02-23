@@ -24,25 +24,35 @@ stateRadiusInput.addEventListener('input', () => {
     }
 });
 
-transEventInput.addEventListener('input', () => {
+function updateTransitionLabel() {
     if (selectedObject instanceof Transition) {
-        selectedObject.label = transEventInput.value;
+        let cond = transConditionInput.value.trim();
+        if (cond && !cond.startsWith('[')) cond = `[${cond}`;
+        if (cond && !cond.endsWith(']')) cond = `${cond}]`;
+
+        if (selectedObject.from.isPseudostate) {
+            selectedObject.label = cond;
+        } else {
+            let evt = transEventInput.value.trim();
+            selectedObject.label = evt + cond;
+        }
         refreshSimVariables();
         updateSimUI();
         validatePseudostates();
     }
-});
+}
 
-transEventInput.addEventListener('change', () => {
-    if (selectedObject instanceof Transition && selectedObject.from.isPseudostate) {
-        let val = transEventInput.value.trim();
-        if (val && !(val.startsWith('[') && val.endsWith(']'))) {
-            val = `[${val}]`;
-            transEventInput.value = val;
-            selectedObject.label = val;
-            refreshSimVariables();
-            updateSimUI();
-            validatePseudostates();
+transEventInput.addEventListener('input', updateTransitionLabel);
+transConditionInput.addEventListener('input', updateTransitionLabel);
+
+transConditionInput.addEventListener('change', () => {
+    if (selectedObject instanceof Transition) {
+        let val = transConditionInput.value.trim();
+        if (val && !val.startsWith('[')) val = `[${val}`;
+        if (val && !val.endsWith(']')) val = `${val}]`;
+        if (transConditionInput.value !== val) {
+            transConditionInput.value = val;
+            updateTransitionLabel();
         }
     }
 });
