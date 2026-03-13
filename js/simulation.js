@@ -48,8 +48,8 @@ function fireEvent(eventName) {
 
     const candidates = transitions.filter(t => {
         if (t.from !== activeState) return false;
-        const tEvent = t.label.split('[')[0].trim();
-        return eventName === tEvent;
+        const tEvents = t.label.split('[')[0].split(',').map(e => e.trim());
+        return tEvents.includes(eventName);
     });
 
     const validTransitions = candidates.filter(t => {

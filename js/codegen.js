@@ -9,8 +9,8 @@ function toEnumName(label) {
         .toUpperCase();
 }
 
-function parseEventName(transitionLabel) {
-    return transitionLabel.split('[')[0].trim();
+function parseEventNames(transitionLabel) {
+    return transitionLabel.split('[')[0].split(',').map(e => e.trim()).filter(e => e);
 }
 
 function resolvePseudoChain(pseudo) {
@@ -58,8 +58,8 @@ function generateCCode() {
     transitions.forEach(t => {
         if (!t.from.isPseudostate) {
             t.label.split('\n').forEach(lbl => {
-                const evtName = parseEventName(lbl.trim());
-                if (evtName) eventSet.add(evtName);
+                const evtNames = parseEventNames(lbl.trim());
+                evtNames.forEach(e => eventSet.add(e));
             });
         }
     });
@@ -104,48 +104,52 @@ function generateCCode() {
             if (t.to.isPseudostate) {
                 const branches = resolvePseudoChain(t.to);
                 lblLines.forEach(lbl => {
-                    const evtName = parseEventName(lbl);
-                    if (!evtName) return;
+                    const evtNames = parseEventNames(lbl);
+                    if (!evtNames.length) return;
                     const condPart = lbl.includes('[') ? lbl.substring(lbl.indexOf('[')) : '';
-                    lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
-                    branches.forEach(b => {
-                        const fullCond = [condPart, b.cond].filter(Boolean).join(' && ')
-                            .replace(/\[/g, '(').replace(/\]/g, ')');
-                        if (fullCond) {
-                            lines.push(`                if (${fullCond}) {`);
-                        } else {
-                            lines.push(`                {`);
-                        }
+                    evtNames.forEach(evtName => {
+                        lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
+                        branches.forEach(b => {
+                            const fullCond = [condPart, b.cond].filter(Boolean).join(' && ')
+                                .replace(/\[/g, '(').replace(/\]/g, ')');
+                            if (fullCond) {
+                                lines.push(`                if (${fullCond}) {`);
+                            } else {
+                                lines.push(`                {`);
+                            }
 
-                        if (t.action) {
-                            t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
-                        }
-                        if (b.action) {
-                            b.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
-                        }
+                            if (t.action) {
+                                t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
+                            }
+                            if (b.action) {
+                                b.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                    ${a.trim()};`); });
+                            }
 
-                        lines.push(`                    next = STATE_${toEnumName(b.target.label)};`);
-                        lines.push(`                    break;`);
-                        lines.push(`                }`);
+                            lines.push(`                    next = STATE_${toEnumName(b.target.label)};`);
+                            lines.push(`                    break;`);
+                            lines.push(`                }`);
+                        });
+                        lines.push(`            }`);
                     });
-                    lines.push(`            }`);
                 });
             } else {
                 lblLines.forEach(lbl => {
-                    const evtName = parseEventName(lbl);
-                    if (!evtName) return;
+                    const evtNames = parseEventNames(lbl);
+                    if (!evtNames.length) return;
                     const condPart = lbl.includes('[') ? lbl.substring(lbl.indexOf('[')).replace(/\[/g, '(').replace(/\]/g, ')') : '';
-                    if (condPart) {
-                        lines.push(`            if (event == EVENT_${toEnumName(evtName)} && ${condPart}) {`);
-                    } else {
-                        lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
-                    }
-                    if (t.action) {
-                        t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                ${a.trim()};`); });
-                    }
-                    lines.push(`                next = STATE_${toEnumName(t.to.label)};`);
-                    lines.push(`                break;`);
-                    lines.push(`            }`);
+                    evtNames.forEach(evtName => {
+                        if (condPart) {
+                            lines.push(`            if (event == EVENT_${toEnumName(evtName)} && ${condPart}) {`);
+                        } else {
+                            lines.push(`            if (event == EVENT_${toEnumName(evtName)}) {`);
+                        }
+                        if (t.action) {
+                            t.action.split('\n').forEach(a => { if (a.trim()) lines.push(`                ${a.trim()};`); });
+                        }
+                        lines.push(`                next = STATE_${toEnumName(t.to.label)};`);
+                        lines.push(`                break;`);
+                        lines.push(`            }`);
+                    });
                 });
             }
         });

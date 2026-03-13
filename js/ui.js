@@ -208,8 +208,8 @@ function updateSimUI() {
     const relevantEvents = new Set();
     transitions.forEach(t => {
         if (t.from.isPseudostate) return;
-        const evt = t.label.split('[')[0].trim();
-        if (evt) relevantEvents.add(evt);
+        const evts = t.label.split('[')[0].split(',').map(e => e.trim()).filter(e => e);
+        evts.forEach(evt => relevantEvents.add(evt));
     });
 
     relevantEvents.forEach(evt => {
