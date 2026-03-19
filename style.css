@@ -303,6 +303,7 @@ canvas {
 /* Simulation Panel specific styles */
 #simPanel {
     max-height: 400px;
+    overflow-y: auto;
 }
 
 .sim-buttons-grid {
